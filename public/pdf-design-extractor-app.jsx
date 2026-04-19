@@ -173,7 +173,7 @@ async function extractPage(page, pageNum) {
 function Section({ title, children }) {
   return (
     <div style={{ marginBottom:18 }}>
-      <div style={{ fontSize:9, color:'#3a3d48', letterSpacing:1.5, textTransform:'uppercase', fontWeight:700, marginBottom:8, paddingBottom:5, borderBottom:'1px solid #1a1c23' }}>{title}</div>
+      <div style={{ fontSize:9, color:'#64748b', letterSpacing:1.5, textTransform:'uppercase', fontWeight:700, marginBottom:8, paddingBottom:5, borderBottom:'1px solid #e8ecf0' }}>{title}</div>
       {children}
     </div>
   );
@@ -182,7 +182,7 @@ function Row({ label, value, mono }) {
   return (
     <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:5 }}>
       <span style={{ fontSize:11, color:'#555' }}>{label}</span>
-      <span style={{ fontSize:11, color:'#ccc', fontFamily:mono?'monospace':'inherit', maxWidth:145, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', textAlign:'right' }}>{value??'—'}</span>
+      <span style={{ fontSize:11, color:'#334155', fontFamily:mono?'monospace':'inherit', maxWidth:145, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', textAlign:'right' }}>{value??'—'}</span>
     </div>
   );
 }
@@ -190,11 +190,11 @@ function ColorPill({ color }) {
   const [copied, setCopied] = useState(false);
   return (
     <div onClick={() => { navigator.clipboard?.writeText(color).catch(()=>{}); setCopied(true); setTimeout(()=>setCopied(false),1200); }} title={`Copy ${color}`} style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:3, cursor:'pointer' }}>
-      <div style={{ width:28, height:28, borderRadius:7, background:color, border:'1px solid rgba(255,255,255,0.08)', transition:'transform 0.1s' }}
+      <div style={{ width:28, height:28, borderRadius:7, background:color, border:'1px solid rgba(0,0,0,0.1)', transition:'transform 0.1s' }}
         onMouseEnter={e=>e.currentTarget.style.transform='scale(1.18)'}
         onMouseLeave={e=>e.currentTarget.style.transform='scale(1)'}
       />
-      <span style={{ fontSize:8, color:copied?'#2AACB8':'#3a3d48', fontFamily:'monospace' }}>{copied?'✓':color.slice(1).toUpperCase()}</span>
+      <span style={{ fontSize:8, color:copied?'#2AACB8':'#64748b', fontFamily:'monospace' }}>{copied?'✓':color.slice(1).toUpperCase()}</span>
     </div>
   );
 }
@@ -208,14 +208,14 @@ function UploadZone({ onUpload }) {
   const [drag, setDrag] = useState(false);
   const ref = useRef(null);
   return (
-    <div style={{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', height:'100vh', background:'#0f1117', gap:28 }}>
+    <div style={{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', height:'100vh', background:'#f4f6fa', gap:28 }}>
       <div style={{ display:'flex', alignItems:'center', gap:10 }}>
         <svg width="30" height="30" viewBox="0 0 32 32" fill="none">
           <rect width="32" height="32" rx="8" fill="#2AACB8" fillOpacity="0.15"/>
           <path d="M8 8h10a6 6 0 0 1 0 12H8V8z" stroke="#2AACB8" strokeWidth="2" fill="none"/>
           <line x1="8" y1="14" x2="18" y2="14" stroke="#2AACB8" strokeWidth="1.5"/>
         </svg>
-        <span style={{ fontSize:20, fontWeight:700, letterSpacing:'-0.5px' }}>PDF Design Extractor</span>
+        <span style={{ fontSize:20, fontWeight:700, letterSpacing:'-0.5px', color:'#0f172a' }}>PDF Design Extractor</span>
       </div>
       <p style={{ color:'#555', fontSize:13, maxWidth:360, textAlign:'center', lineHeight:1.7 }}>
         Upload any PDF to extract colors, fonts, shapes and layout templates — then edit the text directly
@@ -223,13 +223,13 @@ function UploadZone({ onUpload }) {
       <div onDragOver={e=>{e.preventDefault();setDrag(true);}} onDragLeave={()=>setDrag(false)}
         onDrop={e=>{e.preventDefault();setDrag(false);const f=e.dataTransfer.files[0];if(f?.type==='application/pdf')onUpload(f);}}
         onClick={()=>ref.current.click()}
-        style={{ border:`2px dashed ${drag?'#2AACB8':'#252830'}`, borderRadius:14, padding:'52px 88px', cursor:'pointer', background:drag?'rgba(42,172,184,0.06)':'#13151c', textAlign:'center', transition:'all 0.2s' }}>
+        style={{ border:`2px dashed ${drag?'#2AACB8':'#94a3b8'}`, borderRadius:14, padding:'52px 88px', cursor:'pointer', background:drag?'rgba(42,172,184,0.12)':'#ffffff', textAlign:'center', transition:'all 0.2s' }}>
         <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke={drag?'#2AACB8':'#444'} strokeWidth="1.5" style={{ display:'block', margin:'0 auto 14px' }}>
           <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
           <polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
         </svg>
         <p style={{ color:drag?'#2AACB8':'#888', fontSize:14, marginBottom:6 }}>Drop PDF or <span style={{color:'#2AACB8'}}>browse</span></p>
-        <p style={{ color:'#3a3d48', fontSize:11 }}>Proposals, reports, brochures — any PDF</p>
+        <p style={{ color:'#64748b', fontSize:11 }}>Proposals, reports, brochures — any PDF</p>
       </div>
       <input ref={ref} type="file" accept=".pdf" style={{display:'none'}} onChange={e=>e.target.files[0]&&onUpload(e.target.files[0])}/>
     </div>
@@ -238,13 +238,13 @@ function UploadZone({ onUpload }) {
 
 function LoadingScreen({ progress, done, total }) {
   return (
-    <div style={{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', height:'100vh', background:'#0f1117', gap:18 }}>
+    <div style={{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', height:'100vh', background:'#f4f6fa', gap:18 }}>
       <div style={{ fontSize:11, color:'#555', letterSpacing:1.5, textTransform:'uppercase' }}>Extracting Design Data</div>
-      <div style={{ width:300, height:4, background:'#1a1c23', borderRadius:2 }}>
+      <div style={{ width:300, height:4, background:'#e8ecf0', borderRadius:2 }}>
         <div style={{ width:`${progress}%`, height:'100%', background:'#2AACB8', borderRadius:2, transition:'width 0.3s' }}/>
       </div>
       <div style={{ fontSize:30, fontWeight:700, color:'#2AACB8', fontVariantNumeric:'tabular-nums' }}>{progress}%</div>
-      <div style={{ fontSize:11, color:'#3a3d48' }}>Page {done} of {total}</div>
+      <div style={{ fontSize:11, color:'#64748b' }}>Page {done} of {total}</div>
     </div>
   );
 }
@@ -382,28 +382,28 @@ function App() {
   const editedTexts = pg ? pg.textElements.filter(e => pageEdits[e.id] !== undefined) : [];
 
   return (
-    <div style={{ display:'flex', height:'100vh', overflow:'hidden', background:'#0f1117' }}>
+    <div style={{ display:'flex', height:'100vh', overflow:'hidden', background:'#f4f6fa' }}>
 
       {/* ══ LEFT SIDEBAR ══ */}
-      <div style={{ width:188, minWidth:188, background:'#13151c', borderRight:'1px solid #1a1c23', display:'flex', flexDirection:'column', overflow:'hidden' }}>
-        <div style={{ padding:'13px 12px 11px', borderBottom:'1px solid #1a1c23' }}>
+      <div style={{ width:188, minWidth:188, background:'#ffffff', borderRight:'1px solid #e8ecf0', display:'flex', flexDirection:'column', overflow:'hidden' }}>
+        <div style={{ padding:'13px 12px 11px', borderBottom:'1px solid #e8ecf0' }}>
           <div style={{ fontSize:9, color:'#2AACB8', fontWeight:700, letterSpacing:1.3, textTransform:'uppercase', marginBottom:4 }}>Design Extractor</div>
           <div style={{ fontSize:11, color:'#666', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }} title={fileName}>{fileName}</div>
           <div style={{ display:'flex', gap:8, marginTop:4 }}>
-            <span style={{ fontSize:10, color:'#3a3d48' }}>{pages.length} pages</span>
-            <span style={{ fontSize:10, color:'#3a3d48' }}>·</span>
-            <span style={{ fontSize:10, color:'#3a3d48' }}>{templates.length} layouts</span>
+            <span style={{ fontSize:10, color:'#64748b' }}>{pages.length} pages</span>
+            <span style={{ fontSize:10, color:'#64748b' }}>·</span>
+            <span style={{ fontSize:10, color:'#64748b' }}>{templates.length} layouts</span>
             {totalEdits > 0 && <span style={{ fontSize:10, color:'#F59E0B' }}>· {totalEdits} edit{totalEdits>1?'s':''}</span>}
           </div>
         </div>
 
         {templates.length > 0 && (
-          <div style={{ padding:'9px 10px 7px', borderBottom:'1px solid #1a1c23', flexShrink:0 }}>
-            <div style={{ fontSize:9, color:'#3a3d48', letterSpacing:1.5, textTransform:'uppercase', fontWeight:700, marginBottom:7 }}>Layouts</div>
+          <div style={{ padding:'9px 10px 7px', borderBottom:'1px solid #e8ecf0', flexShrink:0 }}>
+            <div style={{ fontSize:9, color:'#64748b', letterSpacing:1.5, textTransform:'uppercase', fontWeight:700, marginBottom:7 }}>Layouts</div>
             <div style={{ display:'flex', flexWrap:'wrap', gap:5 }}>
               {templates.map(t => (
                 <div key={t.id} onClick={() => { const f=pages.find(p=>p.templateId===t.id); if(f){setSelPage(pages.indexOf(f));setSelEl(null);setEditingId(null);} }}
-                  style={{ padding:'3px 9px', borderRadius:12, fontSize:10, cursor:'pointer', background:tmpl?.id===t.id?'rgba(42,172,184,0.2)':'#1a1c23', color:tmpl?.id===t.id?'#2AACB8':'#666', border:`1px solid ${tmpl?.id===t.id?'rgba(42,172,184,0.4)':'#1e2028'}`, transition:'all 0.15s' }}>
+                  style={{ padding:'3px 9px', borderRadius:12, fontSize:10, cursor:'pointer', background:tmpl?.id===t.id?'rgba(42,172,184,0.2)':'#e8ecf0', color:tmpl?.id===t.id?'#2AACB8':'#666', border:`1px solid ${tmpl?.id===t.id?'rgba(42,172,184,0.4)':'#d1d9e0'}`, transition:'all 0.15s' }}>
                   {t.id} <span style={{opacity:0.6}}>·{t.pageNums.length}</span>
                 </div>
               ))}
@@ -412,7 +412,7 @@ function App() {
         )}
 
         <div style={{ flex:1, overflowY:'auto', padding:'8px 8px 16px' }}>
-          <div style={{ fontSize:9, color:'#3a3d48', letterSpacing:1.5, textTransform:'uppercase', fontWeight:700, padding:'5px 2px 7px' }}>Pages</div>
+          <div style={{ fontSize:9, color:'#64748b', letterSpacing:1.5, textTransform:'uppercase', fontWeight:700, padding:'5px 2px 7px' }}>Pages</div>
           {pages.map((p, idx) => (
             <div key={idx} onClick={() => { setSelPage(idx); setSelEl(null); setEditingId(null); }}
               style={{ marginBottom:8, cursor:'pointer', borderRadius:6, overflow:'hidden', border:`2px solid ${idx===selPage?'#2AACB8':'transparent'}`, position:'relative', transition:'border-color 0.15s' }}>
@@ -429,7 +429,7 @@ function App() {
       <div style={{ flex:1, display:'flex', flexDirection:'column', overflow:'hidden', minWidth:0 }}>
 
         {/* Toolbar */}
-        <div style={{ height:46, background:'#13151c', borderBottom:'1px solid #1a1c23', display:'flex', alignItems:'center', padding:'0 12px', gap:7, flexShrink:0 }}>
+        <div style={{ height:46, background:'#ffffff', borderBottom:'1px solid #e8ecf0', display:'flex', alignItems:'center', padding:'0 12px', gap:7, flexShrink:0 }}>
           <span style={{ fontSize:11, color:'#555' }}>Page {pg?.pageNum}/{pages.length}</span>
           {tmpl && <span style={{ fontSize:10, background:'rgba(42,172,184,0.12)', color:'#2AACB8', padding:'2px 7px', borderRadius:10, border:'1px solid rgba(42,172,184,0.25)' }}>Layout {tmpl.id}</span>}
           {totalEdits > 0 && <span style={{ fontSize:10, background:'rgba(245,158,11,0.15)', color:'#F59E0B', padding:'2px 7px', borderRadius:10, border:'1px solid rgba(245,158,11,0.3)' }}>{totalEdits} edit{totalEdits>1?'s':''}</span>}
@@ -437,32 +437,32 @@ function App() {
           <div style={{ flex:1 }}/>
 
           {/* Hint */}
-          <span style={{ fontSize:10, color:'#3a3d48', fontStyle:'italic' }}>Double-click text to edit</span>
-          <div style={{ width:1, height:18, background:'#1e2028' }}/>
+          <span style={{ fontSize:10, color:'#64748b', fontStyle:'italic' }}>Double-click text to edit</span>
+          <div style={{ width:1, height:18, background:'#d1d9e0' }}/>
 
           {/* Overlay */}
-          <span style={{ fontSize:10, color:'#3a3d48' }}>Show</span>
+          <span style={{ fontSize:10, color:'#64748b' }}>Show</span>
           {[['off','None'],['text','Text'],['shapes','Shapes'],['images','Images'],['all','All']].map(([v,l]) => (
-            <button key={v} onClick={() => { if(v==='off'){setShowOverlay(false);}else{setShowOverlay(true);setOverlay(v);} }} style={{ padding:'3px 8px', borderRadius:4, fontSize:10, cursor:'pointer', border:'none', background:(v==='off'?!showOverlay:(showOverlay&&overlay===v))?'#2AACB8':'#1a1c23', color:(v==='off'?!showOverlay:(showOverlay&&overlay===v))?'#fff':'#555', transition:'all 0.15s' }}>{l}</button>
+            <button key={v} onClick={() => { if(v==='off'){setShowOverlay(false);}else{setShowOverlay(true);setOverlay(v);} }} style={{ padding:'3px 8px', borderRadius:4, fontSize:10, cursor:'pointer', border:'none', background:(v==='off'?!showOverlay:(showOverlay&&overlay===v))?'#2AACB8':'#e8ecf0', color:(v==='off'?!showOverlay:(showOverlay&&overlay===v))?'#fff':'#555', transition:'all 0.15s' }}>{l}</button>
           ))}
 
-          <div style={{ width:1, height:18, background:'#1e2028' }}/>
+          <div style={{ width:1, height:18, background:'#d1d9e0' }}/>
           {[0.5,0.75,1,1.25].map(z => (
-            <button key={z} onClick={() => setZoom(z)} style={{ padding:'3px 7px', borderRadius:4, fontSize:10, cursor:'pointer', border:'none', background:zoom===z?'#1e2028':'transparent', color:zoom===z?'#ccc':'#444' }}>{z===1?'100%':z*100+'%'}</button>
+            <button key={z} onClick={() => setZoom(z)} style={{ padding:'3px 7px', borderRadius:4, fontSize:10, cursor:'pointer', border:'none', background:zoom===z?'#d6eef0':'transparent', color:zoom===z?'#0f766e':'#64748b' }}>{z===1?'100%':z*100+'%'}</button>
           ))}
 
-          <div style={{ width:1, height:18, background:'#1e2028' }}/>
+          <div style={{ width:1, height:18, background:'#d1d9e0' }}/>
           <button onClick={() => {
             const blob = new Blob([JSON.stringify({ fileName, pages:pages.map(p=>({ pageNum:p.pageNum, bgColor:p.bgColor, templateId:p.templateId, textElements:p.textElements, shapes:p.shapes, images:p.images, docColors:p.docColors, edits:edits[p.pageNum]||{} })), templates, designTokens:tokens, allEdits:edits }, null, 2)], {type:'application/json'});
             const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=fileName.replace(/\.pdf$/i,'')+'-design.json'; a.click();
           }} style={{ padding:'5px 12px', background:'#2AACB8', color:'#fff', border:'none', borderRadius:5, fontSize:11, cursor:'pointer', fontWeight:600 }}>Export JSON</button>
-          <button onClick={()=>{setPages([]);setTemplates([]);setTokens({colors:[],fonts:[],sizes:[]});setEdits({});}} style={{ padding:'5px 9px', background:'#1a1c23', color:'#666', border:'1px solid #1e2028', borderRadius:5, fontSize:11, cursor:'pointer' }}>New</button>
+          <button onClick={()=>{setPages([]);setTemplates([]);setTokens({colors:[],fonts:[],sizes:[]});setEdits({});}} style={{ padding:'5px 9px', background:'#e8ecf0', color:'#666', border:'1px solid #d1d9e0', borderRadius:5, fontSize:11, cursor:'pointer' }}>New</button>
         </div>
 
         {/* Page canvas + overlays */}
         <div style={{ flex:1, overflow:'auto', padding:20, display:'flex', justifyContent:'center', alignItems:'flex-start' }}
           onClick={() => { if (!editingId) setSelEl(null); }}>
-          <div style={{ position:'relative', display:'inline-block', boxShadow:'0 10px 44px rgba(0,0,0,0.55)', transform:`scale(${zoom})`, transformOrigin:'top center' }}>
+          <div style={{ position:'relative', display:'inline-block', boxShadow:'0 12px 40px rgba(15,23,42,0.1)', transform:`scale(${zoom})`, transformOrigin:'top center' }}>
             <canvas ref={canvasRef} style={{ display:'block' }}/>
 
             {/* ── Edited text overlays (cover original, always shown) ── */}
@@ -534,7 +534,7 @@ function App() {
       </div>
 
       {/* ══ RIGHT INSPECTOR ══ */}
-      <div style={{ width:270, minWidth:270, background:'#13151c', borderLeft:'1px solid #1a1c23', overflow:'auto', padding:'14px 13px 24px' }}>
+      <div style={{ width:270, minWidth:270, background:'#ffffff', borderLeft:'1px solid #e8ecf0', overflow:'auto', padding:'14px 13px 24px' }}>
         {selEl ? (
           <>
             <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:16 }}>
@@ -552,14 +552,14 @@ function App() {
                   onChange={e => setEdit(pg.pageNum, selEl.id, e.target.value)}
                   placeholder="Edit text content..."
                   style={{
-                    width:'100%', minHeight:72, background:'#0f1117', border:'1px solid #2AACB8',
-                    borderRadius:6, color:'#fff', fontSize:12, padding:'8px 10px',
+                    width:'100%', minHeight:72, background:'#ffffff', border:'1px solid #2AACB8',
+                    borderRadius:6, color:'#0f172a', fontSize:12, padding:'8px 10px',
                     resize:'vertical', fontFamily: selEl.style.fontFamily || 'inherit',
                     lineHeight:1.5, outline:'none',
                   }}
                 />
                 <div style={{ display:'flex', gap:6, marginTop:8 }}>
-                  <button onClick={() => { setEdit(pg.pageNum, selEl.id, selEl.content); }} style={{ flex:1, padding:'5px 0', background:'#1a1c23', color:'#888', border:'1px solid #1e2028', borderRadius:5, fontSize:10, cursor:'pointer' }}>
+                  <button onClick={() => { setEdit(pg.pageNum, selEl.id, selEl.content); }} style={{ flex:1, padding:'5px 0', background:'#e8ecf0', color:'#888', border:'1px solid #d1d9e0', borderRadius:5, fontSize:10, cursor:'pointer' }}>
                     Reset
                   </button>
                   <button onClick={() => { setEditingId(selEl.id); }} style={{ flex:1, padding:'5px 0', background:'rgba(42,172,184,0.15)', color:'#2AACB8', border:'1px solid rgba(42,172,184,0.3)', borderRadius:5, fontSize:10, cursor:'pointer' }}>
@@ -598,8 +598,8 @@ function App() {
               <Section title="Colors">
                 {[['Fill',selEl.fill],['Stroke',selEl.stroke]].filter(([,v])=>v).map(([lbl,col])=>(
                   <div key={lbl} style={{ display:'flex', alignItems:'center', gap:10, marginBottom:8 }}>
-                    <div style={{ width:22, height:22, borderRadius:5, background:col, border:'1px solid rgba(255,255,255,0.1)', flexShrink:0 }}/>
-                    <div><div style={{ fontSize:9, color:'#3a3d48' }}>{lbl}</div><div style={{ fontSize:11, color:'#ccc', fontFamily:'monospace' }}>{col.toUpperCase()}</div></div>
+                    <div style={{ width:22, height:22, borderRadius:5, background:col, border:'1px solid rgba(0,0,0,0.12)', flexShrink:0 }}/>
+                    <div><div style={{ fontSize:9, color:'#64748b' }}>{lbl}</div><div style={{ fontSize:11, color:'#334155', fontFamily:'monospace' }}>{col.toUpperCase()}</div></div>
                   </div>
                 ))}
               </Section>
@@ -619,8 +619,8 @@ function App() {
               <Row label="Edits this page" value={Object.keys(pageEdits).length||'None'}/>
               {pg?.bgColor && (
                 <div style={{ display:'flex', alignItems:'center', gap:8, marginTop:8 }}>
-                  <div style={{ width:20, height:20, borderRadius:4, background:pg.bgColor, border:'1px solid rgba(255,255,255,0.1)', flexShrink:0 }}/>
-                  <div><div style={{ fontSize:9, color:'#3a3d48' }}>Background</div><div style={{ fontSize:11, color:'#888', fontFamily:'monospace' }}>{pg.bgColor.toUpperCase()}</div></div>
+                  <div style={{ width:20, height:20, borderRadius:4, background:pg.bgColor, border:'1px solid rgba(0,0,0,0.12)', flexShrink:0 }}/>
+                  <div><div style={{ fontSize:9, color:'#64748b' }}>Background</div><div style={{ fontSize:11, color:'#888', fontFamily:'monospace' }}>{pg.bgColor.toUpperCase()}</div></div>
                 </div>
               )}
             </Section>
@@ -633,16 +633,16 @@ function App() {
                     const pgData = pages.find(p=>p.pageNum===+pn);
                     const origEl = pgData?.textElements.find(e=>e.id===elId);
                     return (
-                      <div key={elId} style={{ padding:'7px 8px', background:'#0f1117', borderRadius:5, marginBottom:5, border:'1px solid #1e2028', cursor:'pointer' }}
+                      <div key={elId} style={{ padding:'7px 8px', background:'#f4f6fa', borderRadius:5, marginBottom:5, border:'1px solid #d1d9e0', cursor:'pointer' }}
                         onClick={() => { const idx=pages.indexOf(pgData); if(idx>=0){setSelPage(idx);setSelEl(origEl);setShowOverlay(true);setOverlay('text');} }}>
-                        <div style={{ fontSize:9, color:'#3a3d48', marginBottom:3 }}>Page {pn}</div>
+                        <div style={{ fontSize:9, color:'#64748b', marginBottom:3 }}>Page {pn}</div>
                         <div style={{ fontSize:10, color:'#888', marginBottom:2 }}>Was: <span style={{color:'#555'}}>{origEl?.content?.slice(0,30)||'…'}</span></div>
-                        <div style={{ fontSize:10, color:'#2AACB8' }}>Now: <span style={{color:'#ccc'}}>{newText.slice(0,30)}</span></div>
+                        <div style={{ fontSize:10, color:'#2AACB8' }}>Now: <span style={{color:'#334155'}}>{newText.slice(0,30)}</span></div>
                       </div>
                     );
                   })
                 )}
-                <button onClick={()=>setEdits({})} style={{ width:'100%', marginTop:4, padding:'5px 0', background:'transparent', color:'#555', border:'1px solid #1e2028', borderRadius:5, fontSize:10, cursor:'pointer' }}>Clear All Edits</button>
+                <button onClick={()=>setEdits({})} style={{ width:'100%', marginTop:4, padding:'5px 0', background:'transparent', color:'#555', border:'1px solid #d1d9e0', borderRadius:5, fontSize:10, cursor:'pointer' }}>Clear All Edits</button>
               </Section>
             )}
 
@@ -652,7 +652,7 @@ function App() {
                 <div style={{ display:'flex', flexWrap:'wrap', gap:7 }}>
                   {tokens.colors.map((c,i)=><ColorPill key={i} color={c}/>)}
                 </div>
-                <p style={{ fontSize:10, color:'#3a3d48', marginTop:8 }}>Click swatch to copy hex</p>
+                <p style={{ fontSize:10, color:'#64748b', marginTop:8 }}>Click swatch to copy hex</p>
               </Section>
             )}
 
@@ -669,9 +669,9 @@ function App() {
             {tokens.fonts.length > 0 && (
               <Section title={`Fonts · ${tokens.fonts.length}`}>
                 {tokens.fonts.map((f,i)=>(
-                  <div key={i} style={{ padding:'7px 0', borderBottom:'1px solid #1a1c23' }}>
-                    <div style={{ fontSize:13, color:'#ccc', fontFamily:f, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{f}</div>
-                    <div style={{ fontSize:10, color:'#3a3d48', marginTop:2 }}>Aa Bb 1234</div>
+                  <div key={i} style={{ padding:'7px 0', borderBottom:'1px solid #e8ecf0' }}>
+                    <div style={{ fontSize:13, color:'#334155', fontFamily:f, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{f}</div>
+                    <div style={{ fontSize:10, color:'#64748b', marginTop:2 }}>Aa Bb 1234</div>
                   </div>
                 ))}
               </Section>
@@ -681,7 +681,7 @@ function App() {
             {tokens.sizes.length > 0 && (
               <Section title="Type Scale">
                 <div style={{ display:'flex', flexWrap:'wrap', gap:5 }}>
-                  {tokens.sizes.map((s,i)=><span key={i} style={{ background:'#0f1117', padding:'3px 7px', borderRadius:4, fontSize:10, color:'#666', fontFamily:'monospace', border:'1px solid #1a1c23' }}>{s}pt</span>)}
+                  {tokens.sizes.map((s,i)=><span key={i} style={{ background:'#f4f6fa', padding:'3px 7px', borderRadius:4, fontSize:10, color:'#666', fontFamily:'monospace', border:'1px solid #e8ecf0' }}>{s}pt</span>)}
                 </div>
               </Section>
             )}
@@ -690,12 +690,12 @@ function App() {
             {templates.length > 0 && (
               <Section title="Layouts">
                 {templates.map(t=>(
-                  <div key={t.id} style={{ padding:'7px 9px', background:'#0f1117', borderRadius:5, marginBottom:5, border:'1px solid #1a1c23' }}>
+                  <div key={t.id} style={{ padding:'7px 9px', background:'#f4f6fa', borderRadius:5, marginBottom:5, border:'1px solid #e8ecf0' }}>
                     <div style={{ display:'flex', justifyContent:'space-between', marginBottom:3 }}>
                       <span style={{ fontSize:11, color:'#2AACB8', fontWeight:600 }}>Layout {t.id}</span>
                       <span style={{ fontSize:10, color:'#555' }}>{t.pageNums.length} pages</span>
                     </div>
-                    <div style={{ fontSize:10, color:'#3a3d48' }}>Pages: {t.pageNums.slice(0,8).join(', ')}{t.pageNums.length>8?'…':''}</div>
+                    <div style={{ fontSize:10, color:'#64748b' }}>Pages: {t.pageNums.slice(0,8).join(', ')}{t.pageNums.length>8?'…':''}</div>
                   </div>
                 ))}
               </Section>
