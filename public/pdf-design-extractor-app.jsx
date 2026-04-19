@@ -450,8 +450,9 @@ function Row({ label, value, mono }) {
   );
 }
 function TypeBadge({ type }) {
-  const map = { text: '#2AACB8', shape: '#8B5CF6', image: '#F59E0B', video: '#6366F1' };
-  return <span style={{ background: map[type] || '#555', color: '#fff', fontSize: 9, padding: '2px 7px', borderRadius: 4, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5 }}>{type}</span>;
+  const map = { text: '#2AACB8', userText: '#2AACB8', shape: '#8B5CF6', image: '#F59E0B', video: '#6366F1', table: '#059669' };
+  const label = type === 'userText' ? 'text+' : type;
+  return <span style={{ background: map[type] || '#555', color: '#fff', fontSize: 9, padding: '2px 7px', borderRadius: 4, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5 }}>{label}</span>;
 }
 
 function IconAddImage() {
@@ -466,6 +467,183 @@ function IconAddVideo() {
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
       <rect x="2" y="5" width="14" height="14" rx="2" /><path d="M18 9l4 3v6l-4-3V9z" fill="currentColor" stroke="none" />
     </svg>
+  );
+}
+function IconAddTable() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <rect x="3" y="3" width="18" height="18" rx="2" />
+      <path d="M3 9h18M3 15h18M9 3v18M15 3v18" />
+    </svg>
+  );
+}
+function IconAddText() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M4 7V5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" />
+      <path d="M4 15h8" />
+      <path d="M8 12v6" />
+    </svg>
+  );
+}
+
+function PlacedUserTextBody({
+  html,
+  readOnly,
+  onHtmlChange,
+  onFocusFirstEdit,
+  onPointerMove,
+  onPointerUp,
+  onPointerCancel,
+  onAltDragPointerDown,
+}) {
+  const ref = useRef(null);
+  useEffect(() => {
+    if (readOnly) return;
+    const el = ref.current;
+    if (!el || document.activeElement === el) return;
+    const next = html || '<p><br></p>';
+    if (el.innerHTML !== next) el.innerHTML = next;
+  }, [html, readOnly]);
+  if (readOnly) {
+    return (
+      <div
+        style={{
+          height: '100%',
+          overflow: 'auto',
+          padding: '6px 8px',
+          fontSize: 14,
+          lineHeight: 1.5,
+          color: '#334155',
+          wordBreak: 'break-word',
+        }}
+        dangerouslySetInnerHTML={{ __html: html || '<p><br></p>' }}
+      />
+    );
+  }
+  return (
+    <div
+      ref={ref}
+      contentEditable
+      suppressContentEditableWarning
+      onPointerDown={e => {
+        if (e.button !== 0 || !onAltDragPointerDown) return;
+        if (e.altKey) {
+          e.preventDefault();
+          onAltDragPointerDown(e);
+        }
+      }}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      onPointerCancel={onPointerCancel}
+      onInput={e => onHtmlChange(e.currentTarget.innerHTML)}
+      onFocus={onFocusFirstEdit}
+      style={{
+        height: '100%',
+        overflow: 'auto',
+        padding: '6px 8px',
+        outline: 'none',
+        fontSize: 14,
+        lineHeight: 1.5,
+        color: '#0f172a',
+        wordBreak: 'break-word',
+        touchAction: 'manipulation',
+        cursor: 'text',
+      }}
+      title="Hold Alt (⌥) and drag anywhere here to move the box"
+    />
+  );
+}
+
+function TableCellEditor({ row, col, html, readOnly, onHtmlInput, onCellFocus }) {
+  const tdRef = useRef(null);
+
+  useEffect(() => {
+    const el = tdRef.current;
+    if (!el || readOnly) return;
+    if (document.activeElement === el) return;
+    const next = html || '\u200b';
+    if (el.innerHTML !== next) el.innerHTML = next;
+  }, [html, readOnly, row, col]);
+
+  if (readOnly) {
+    return (
+      <td
+        style={{
+          border: '1px solid #cbd5e1',
+          padding: 6,
+          fontSize: 11,
+          color: '#334155',
+          background: '#ffffff',
+          verticalAlign: 'top',
+          textAlign: 'left',
+          wordBreak: 'break-word',
+        }}
+      >
+        <div dangerouslySetInnerHTML={{ __html: html || '\u200b' }} />
+      </td>
+    );
+  }
+
+  return (
+    <td
+      ref={tdRef}
+      contentEditable
+      suppressContentEditableWarning
+      tabIndex={0}
+      onFocus={onCellFocus}
+      onInput={e => onHtmlInput(e.currentTarget.innerHTML)}
+      style={{
+        border: '1px solid #cbd5e1',
+        padding: 6,
+        fontSize: 11,
+        color: '#0f172a',
+        background: '#ffffff',
+        verticalAlign: 'top',
+        textAlign: 'left',
+        outline: 'none',
+        wordBreak: 'break-word',
+        minHeight: 22,
+      }}
+    />
+  );
+}
+
+function PlacedTableGrid({ rows, cols, cells, readOnly, onCellHtmlInput, onCellFocus }) {
+  const matrix = cells && cells.length === rows && (cells[0]?.length === cols)
+    ? cells
+    : ensureTableCells(rows, cols, cells);
+  const trs = [];
+  for (let i = 0; i < rows; i++) {
+    const tds = [];
+    for (let j = 0; j < cols; j++) {
+      const html = matrix[i]?.[j] ?? '';
+      tds.push(
+        <TableCellEditor
+          key={`${i}-${j}`}
+          row={i}
+          col={j}
+          html={html}
+          readOnly={readOnly}
+          onHtmlInput={h => onCellHtmlInput(i, j, h)}
+          onCellFocus={onCellFocus}
+        />
+      );
+    }
+    trs.push(<tr key={i}>{tds}</tr>);
+  }
+  return (
+    <table
+      style={{
+        width: '100%',
+        height: '100%',
+        borderCollapse: 'collapse',
+        tableLayout: 'fixed',
+        background: '#ffffff',
+      }}
+    >
+      <tbody>{trs}</tbody>
+    </table>
   );
 }
 function IconTrash() {
@@ -500,52 +678,250 @@ function IconRedo() {
   );
 }
 
-/** Overlay mode toolbar (icons only). */
-function IconModeNone() {
+function IconView() {
   return (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-      <circle cx="12" cy="12" r="10" /><path d="M4.93 4.93l14.14 14.14" />
+      <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z" />
+      <circle cx="12" cy="12" r="3" />
     </svg>
   );
 }
-function IconModeText() {
+function IconEdit() {
   return (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-      <path d="M4 7h16M4 12h12M4 17h16" />
-    </svg>
-  );
-}
-function IconModeShapes() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-      <rect x="3" y="11" width="8" height="8" rx="1" /><circle cx="16" cy="9" r="5" />
-    </svg>
-  );
-}
-function IconModeImages() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-      <rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8.5" cy="8.5" r="1.5" fill="currentColor" stroke="none" /><path d="M21 15l-5-5L5 21" />
-    </svg>
-  );
-}
-function IconModeAll() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-      <rect x="2" y="3" width="16" height="11" rx="1" opacity="0.35" />
-      <rect x="4" y="7" width="16" height="11" rx="1" opacity="0.65" />
-      <rect x="6" y="11" width="16" height="11" rx="1" />
+      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
     </svg>
   );
 }
 
-const OVERLAY_MODE_ICONS = [
-  ['off', 'None', IconModeNone],
-  ['text', 'Text', IconModeText],
-  ['shapes', 'Shapes', IconModeShapes],
-  ['images', 'Images', IconModeImages],
-  ['all', 'All', IconModeAll],
-];
+const DEFAULT_RICH_FONT_LIST = ['Arial', 'Helvetica', 'Georgia', 'Times New Roman', 'Courier New', 'Verdana', 'Trebuchet MS', 'Palatino Linotype', 'Garamond', 'Comic Sans MS'];
+const FONT_SIZE_PX_LIST = [10, 11, 12, 14, 16, 18, 20, 24, 28, 32, 36, 48];
+
+function mergeFontOptions(extracted) {
+  const seen = new Set();
+  const out = [];
+  for (const f of [...(extracted || []), ...DEFAULT_RICH_FONT_LIST]) {
+    const s = String(f || '').trim();
+    if (!s || seen.has(s)) continue;
+    seen.add(s);
+    out.push(s);
+  }
+  return out.slice(0, 40);
+}
+
+function isProbablyHtml(s) {
+  return typeof s === 'string' && /<[a-z][\s\S]*>/i.test(s);
+}
+
+/** Build / trim a rows×cols matrix of HTML cell strings. */
+function ensureTableCells(rows, cols, prev) {
+  const next = [];
+  for (let i = 0; i < rows; i++) {
+    const row = [];
+    for (let j = 0; j < cols; j++) {
+      const v = prev?.[i]?.[j];
+      row.push(typeof v === 'string' ? v : '');
+    }
+    next.push(row);
+  }
+  return next;
+}
+
+function execRich(cmd, val) {
+  try {
+    document.execCommand('styleWithCSS', false, true);
+    return document.execCommand(cmd, false, val);
+  } catch {
+    return false;
+  }
+}
+
+function applyFontSizePx(px) {
+  const n = Number(px);
+  if (!Number.isFinite(n) || n < 1) return;
+  document.execCommand('styleWithCSS', false, true);
+  document.execCommand('fontSize', false, '7');
+  const fonts = document.getElementsByTagName('font');
+  for (let i = fonts.length - 1; i >= 0; i--) {
+    const el = fonts[i];
+    if (el.size === '7') {
+      el.removeAttribute('size');
+      el.style.fontSize = `${n}px`;
+    }
+  }
+}
+
+function RichTextToolbar({ disabled, fontChoices }) {
+  const fonts = mergeFontOptions(fontChoices);
+  const btn = (label, title, onClick, extra = {}) => (
+    <button
+      type="button"
+      key={label}
+      title={title}
+      disabled={disabled}
+      onMouseDown={e => e.preventDefault()}
+      onClick={(e) => { e.preventDefault(); if (!disabled) onClick(); }}
+      style={{
+        padding: '3px 7px',
+        fontSize: 11,
+        fontWeight: extra.bold ? 700 : 600,
+        border: '1px solid #cbd5e1',
+        borderRadius: 5,
+        background: '#fff',
+        color: '#334155',
+        cursor: disabled ? 'not-allowed' : 'pointer',
+        opacity: disabled ? 0.45 : 1,
+        fontStyle: extra.italic ? 'italic' : 'normal',
+        textDecoration: extra.underline ? 'underline' : 'none',
+        minWidth: 26,
+      }}
+    >
+      {label}
+    </button>
+  );
+
+  return (
+    <div
+      data-rich-toolbar
+      style={{
+        display: 'flex',
+        flexWrap: 'wrap',
+        alignItems: 'center',
+        gap: 6,
+        marginBottom: 8,
+        padding: '8px 8px 10px',
+        background: '#f8fafc',
+        border: '1px solid #e2e8f0',
+        borderRadius: 8,
+      }}
+    >
+      <select
+        title="Font"
+        disabled={disabled}
+        onMouseDown={e => e.preventDefault()}
+        onChange={e => {
+          const v = e.target.value;
+          execRich('fontName', v);
+          e.target.selectedIndex = 0;
+        }}
+        style={{ fontSize: 11, padding: '4px 6px', borderRadius: 5, border: '1px solid #cbd5e1', maxWidth: 140 }}
+        defaultValue=""
+      >
+        <option value="" disabled>Font…</option>
+        {fonts.map(f => (
+          <option key={f} value={f}>{f}</option>
+        ))}
+      </select>
+      <select
+        title="Font size"
+        disabled={disabled}
+        onMouseDown={e => e.preventDefault()}
+        onChange={e => {
+          const v = e.target.value;
+          if (v) applyFontSizePx(v);
+          e.target.selectedIndex = 0;
+        }}
+        style={{ fontSize: 11, padding: '4px 6px', borderRadius: 5, border: '1px solid #cbd5e1', width: 72 }}
+        defaultValue=""
+      >
+        <option value="" disabled>Size</option>
+        {FONT_SIZE_PX_LIST.map(sz => (
+          <option key={sz} value={String(sz)}>{sz}px</option>
+        ))}
+      </select>
+      {btn('B', 'Bold', () => execRich('bold'), { bold: true })}
+      {btn('I', 'Italic', () => execRich('italic'), { italic: true })}
+      {btn('U', 'Underline', () => execRich('underline'), { underline: true })}
+      <label style={{ fontSize: 10, color: '#64748b', display: 'flex', alignItems: 'center', gap: 4 }}>
+        Text
+        <input
+          type="color"
+          disabled={disabled}
+          onMouseDown={e => e.preventDefault()}
+          onChange={e => execRich('foreColor', e.target.value)}
+          style={{ width: 26, height: 22, padding: 0, border: '1px solid #cbd5e1', borderRadius: 4, cursor: disabled ? 'not-allowed' : 'pointer' }}
+        />
+      </label>
+      <label style={{ fontSize: 10, color: '#64748b', display: 'flex', alignItems: 'center', gap: 4 }}>
+        BG
+        <input
+          type="color"
+          title="Background"
+          disabled={disabled}
+          onMouseDown={e => e.preventDefault()}
+          onChange={e => execRich('backColor', e.target.value)}
+          style={{ width: 26, height: 22, padding: 0, border: '1px solid #cbd5e1', borderRadius: 4, cursor: disabled ? 'not-allowed' : 'pointer' }}
+        />
+      </label>
+      <label style={{ fontSize: 10, color: '#64748b', display: 'flex', alignItems: 'center', gap: 4 }}>
+        Hi
+        <input
+          type="color"
+          title="Highlight"
+          disabled={disabled}
+          onMouseDown={e => e.preventDefault()}
+          onChange={e => {
+            if (!execRich('hiliteColor', e.target.value)) execRich('backColor', e.target.value);
+          }}
+          style={{ width: 26, height: 22, padding: 0, border: '1px solid #cbd5e1', borderRadius: 4, cursor: disabled ? 'not-allowed' : 'pointer' }}
+        />
+      </label>
+      {btn('Link', 'Insert link', () => {
+        const u = window.prompt('Link URL', 'https://');
+        if (u) execRich('createLink', absolutizeUrl(u.trim()));
+      })}
+      {btn('◧', 'Align left', () => execRich('justifyLeft'))}
+      {btn('≡', 'Align center', () => execRich('justifyCenter'))}
+      {btn('◨', 'Align right', () => execRich('justifyRight'))}
+      {btn('⊞', 'Justify', () => execRich('justifyFull'))}
+      {btn('⊢', 'Outdent', () => execRich('outdent'))}
+      {btn('⊣', 'Indent', () => execRich('indent'))}
+      {btn('•', 'Bullet list', () => execRich('insertUnorderedList'))}
+      {btn('1.', 'Numbered list', () => execRich('insertOrderedList'))}
+    </div>
+  );
+}
+
+function RichTextEditorBlock({ html, onHtmlChange, disabled, fontChoices, minHeight = 96 }) {
+  const ref = useRef(null);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || disabled) return;
+    if (document.activeElement === el) return;
+    const next = html ?? '';
+    if (isProbablyHtml(next)) {
+      if (el.innerHTML !== next) el.innerHTML = next;
+    } else if (el.textContent !== next) {
+      el.textContent = next;
+    }
+  }, [html, disabled]);
+
+  return (
+    <>
+      <RichTextToolbar disabled={disabled} fontChoices={fontChoices} />
+      <div
+        ref={ref}
+        contentEditable={!disabled}
+        suppressContentEditableWarning
+        onInput={e => onHtmlChange(e.currentTarget.innerHTML)}
+        style={{
+          width: '100%',
+          minHeight,
+          background: '#ffffff',
+          border: '1px solid #2AACB8',
+          borderRadius: 6,
+          color: '#0f172a',
+          fontSize: 12,
+          padding: '8px 10px',
+          lineHeight: 1.5,
+          outline: 'none',
+        }}
+      />
+    </>
+  );
+}
 
 function ImageCropModal({ sourceUrl, onApply, onCancel }) {
   const [natural, setNatural] = useState({ w: 0, h: 0 });
@@ -650,42 +1026,74 @@ function LoadingScreen({ progress, done, total }) {
 }
 
 // ─── Inline Text Editor (canvas overlay) ─────────────────────────────────────
-function InlineEditor({ el, bgColor, initialValue, onSave, onCancel }) {
+function InlineEditor({ el, bgColor, initialValue, fontChoices, onSave, onCancel }) {
   const ref = useRef(null);
-  const [val, setVal] = useState(initialValue);
 
   useEffect(() => {
-    if (ref.current) {
-      ref.current.focus();
-      ref.current.select();
-    }
-  }, []);
+    const r = ref.current;
+    if (!r) return;
+    const raw = initialValue ?? '';
+    if (isProbablyHtml(raw)) r.innerHTML = raw;
+    else r.textContent = raw;
+    r.focus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount / element identity only
+  }, [el.id]);
 
-  const commit = () => onSave(val);
+  const commit = () => {
+    if (!ref.current) return;
+    onSave(ref.current.innerHTML);
+  };
+
+  const toolbarTop = Math.max(4, el.y - 112);
 
   return (
-    <textarea
-      ref={ref}
-      className="edit-textarea"
-      value={val}
-      onChange={e => setVal(e.target.value)}
-      onBlur={commit}
-      onKeyDown={e => {
-        if (e.key === 'Escape') { e.preventDefault(); onCancel(); }
-        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); commit(); }
-      }}
-      style={{
-        left: el.x - 1,
-        top: el.y - 1,
-        width: el.w + 8,
-        minHeight: el.h + 4,
-        fontSize: el.style.fontSizePx || el.h * 0.72,
-        fontFamily: el.style.fontFamily || 'sans-serif',
-        fontWeight: el.style.fontWeight,
-        fontStyle: el.style.fontStyle,
-        background: bgColor || '#ffffff',
-      }}
-    />
+    <>
+      <div
+        data-rich-toolbar
+        style={{
+          position: 'absolute',
+          left: el.x - 1,
+          top: toolbarTop,
+          width: Math.min(Math.max(el.w + 120, 280), 440),
+          zIndex: 50,
+          pointerEvents: 'auto',
+        }}
+      >
+        <RichTextToolbar disabled={false} fontChoices={fontChoices} />
+      </div>
+      <div
+        ref={ref}
+        className="edit-textarea"
+        contentEditable
+        suppressContentEditableWarning
+        onBlur={() => {
+          setTimeout(() => {
+            const a = document.activeElement;
+            if (a?.closest?.('[data-rich-toolbar]')) return;
+            commit();
+          }, 0);
+        }}
+        onKeyDown={e => {
+          if (e.key === 'Escape') { e.preventDefault(); onCancel(); }
+        }}
+        style={{
+          position: 'absolute',
+          left: el.x - 1,
+          top: el.y - 1,
+          width: el.w + 8,
+          minHeight: el.h + 4,
+          fontSize: el.style.fontSizePx || el.h * 0.72,
+          fontFamily: el.style.fontFamily || 'sans-serif',
+          fontWeight: el.style.fontWeight,
+          fontStyle: el.style.fontStyle,
+          background: bgColor || '#ffffff',
+          border: '1px solid #2AACB8',
+          padding: 2,
+          zIndex: 49,
+          outline: 'none',
+        }}
+      />
+    </>
   );
 }
 
@@ -704,11 +1112,13 @@ function App() {
   const [imageEdits, setImageEdits] = useState({});    // { [pageNum]: { [imageId]: { removed?, src? } } }
   const [addedImages, setAddedImages] = useState({});  // { [pageNum]: [{ id, x,y,w,h, src, type:'image' }] }
   const [addedVideos, setAddedVideos] = useState({});  // { [pageNum]: [{ id, x,y,w,h, src blob url, type:'video' }] }
+  const [addedTables, setAddedTables] = useState({});  // { [pageNum]: [{ id, x,y,w,h, rows, cols, type:'table' }] }
+  const [addedRichTexts, setAddedRichTexts] = useState({});  // { [pageNum]: [{ id, x,y,w,h, html, type:'userText', _userAdded }] }
   const [cropModal, setCropModal] = useState(null);  // { sourceUrl, resolve: (dataUrl) => void }
   const [templates, setTemplates] = useState([]);
   const [tokens, setTokens] = useState({ colors: [], fonts: [], sizes: [] });
-  const [overlay, setOverlay] = useState('text');
-  const [showOverlay, setShowOverlay] = useState(true);
+  const [editorMode, setEditorMode] = useState('edit'); // 'edit' | 'view'
+  const [activeAddTool, setActiveAddTool] = useState(null); // 'image' | 'video' | 'table' | 'userText' | null
   const [zoom, setZoom] = useState(0.9);
   const canvasRef = useRef(null);
   const addImageInputRef = useRef(null);
@@ -719,7 +1129,7 @@ function App() {
   const suppressImageClickRef = useRef(false);
   const [draggingImageId, setDraggingImageId] = useState(null);
 
-  // Undo / redo (snapshots of edits + imageEdits + addedImages + addedVideos)
+  // Undo / redo (snapshots of edits + imageEdits + addedImages + addedVideos + addedTables + addedRichTexts)
   const historyStackRef = useRef([]);
   const redoStackRef = useRef([]);
   const isRestoringRef = useRef(false);
@@ -727,6 +1137,8 @@ function App() {
   const imageEditsRef = useRef(imageEdits);
   const addedImagesRef = useRef(addedImages);
   const addedVideosRef = useRef(addedVideos);
+  const addedTablesRef = useRef(addedTables);
+  const addedRichTextsRef = useRef(addedRichTexts);
   const lastTextHistoryAtRef = useRef(0);
   const [historyUi, setHistoryUi] = useState(0);
 
@@ -734,6 +1146,8 @@ function App() {
   useEffect(() => { imageEditsRef.current = imageEdits; }, [imageEdits]);
   useEffect(() => { addedImagesRef.current = addedImages; }, [addedImages]);
   useEffect(() => { addedVideosRef.current = addedVideos; }, [addedVideos]);
+  useEffect(() => { addedTablesRef.current = addedTables; }, [addedTables]);
+  useEffect(() => { addedRichTextsRef.current = addedRichTexts; }, [addedRichTexts]);
 
   const captureBeforeChange = useCallback(() => {
     if (isRestoringRef.current) return;
@@ -742,6 +1156,8 @@ function App() {
       imageEdits: JSON.parse(JSON.stringify(imageEditsRef.current)),
       addedImages: JSON.parse(JSON.stringify(addedImagesRef.current)),
       addedVideos: JSON.parse(JSON.stringify(addedVideosRef.current)),
+      addedTables: JSON.parse(JSON.stringify(addedTablesRef.current)),
+      addedRichTexts: JSON.parse(JSON.stringify(addedRichTextsRef.current)),
     };
     historyStackRef.current = [...historyStackRef.current.slice(-39), snap];
     redoStackRef.current = [];
@@ -756,6 +1172,8 @@ function App() {
       imageEdits: JSON.parse(JSON.stringify(imageEditsRef.current)),
       addedImages: JSON.parse(JSON.stringify(addedImagesRef.current)),
       addedVideos: JSON.parse(JSON.stringify(addedVideosRef.current)),
+      addedTables: JSON.parse(JSON.stringify(addedTablesRef.current)),
+      addedRichTexts: JSON.parse(JSON.stringify(addedRichTextsRef.current)),
     };
     redoStackRef.current.push(current);
     const prev = historyStackRef.current.pop();
@@ -763,6 +1181,8 @@ function App() {
     setImageEdits(prev.imageEdits);
     setAddedImages(prev.addedImages);
     setAddedVideos(prev.addedVideos);
+    setAddedTables(prev.addedTables || {});
+    setAddedRichTexts(prev.addedRichTexts || {});
     setSelEl(null);
     setEditingId(null);
     setHistoryUi(u => u + 1);
@@ -777,6 +1197,8 @@ function App() {
       imageEdits: JSON.parse(JSON.stringify(imageEditsRef.current)),
       addedImages: JSON.parse(JSON.stringify(addedImagesRef.current)),
       addedVideos: JSON.parse(JSON.stringify(addedVideosRef.current)),
+      addedTables: JSON.parse(JSON.stringify(addedTablesRef.current)),
+      addedRichTexts: JSON.parse(JSON.stringify(addedRichTextsRef.current)),
     };
     historyStackRef.current.push(current);
     const next = redoStackRef.current.pop();
@@ -784,6 +1206,8 @@ function App() {
     setImageEdits(next.imageEdits);
     setAddedImages(next.addedImages);
     setAddedVideos(next.addedVideos);
+    setAddedTables(next.addedTables || {});
+    setAddedRichTexts(next.addedRichTexts || {});
     setSelEl(null);
     setEditingId(null);
     setHistoryUi(u => u + 1);
@@ -848,11 +1272,14 @@ function App() {
   const totalEdits = Object.values(edits).reduce((s, pg) => s + Object.keys(pg).length, 0);
 
   const pageHasImageMods = pn =>
-    Object.keys(imageEdits[pn] || {}).length > 0 || (addedImages[pn] || []).length > 0 || (addedVideos[pn] || []).length > 0;
+    Object.keys(imageEdits[pn] || {}).length > 0 || (addedImages[pn] || []).length > 0 || (addedVideos[pn] || []).length > 0
+    || (addedTables[pn] || []).length > 0 || (addedRichTexts[pn] || []).length > 0;
   const totalImageMods =
     Object.values(imageEdits).reduce((s, o) => s + Object.keys(o).length, 0) +
     Object.values(addedImages).reduce((s, arr) => s + arr.length, 0) +
-    Object.values(addedVideos).reduce((s, arr) => s + arr.length, 0);
+    Object.values(addedVideos).reduce((s, arr) => s + arr.length, 0) +
+    Object.values(addedTables).reduce((s, arr) => s + arr.length, 0) +
+    Object.values(addedRichTexts).reduce((s, arr) => s + arr.length, 0);
 
   const deletePageAtIndex = useCallback((delIdx) => {
     if (pages.length <= 1) {
@@ -872,6 +1299,8 @@ function App() {
     setImageEdits(prev => remapPageKeyedState(prev, delPn));
     setAddedImages(prev => remapPageKeyedState(prev, delPn));
     setAddedVideos(prev => remapPageKeyedState(prev, delPn));
+    setAddedTables(prev => remapPageKeyedState(prev, delPn));
+    setAddedRichTexts(prev => remapPageKeyedState(prev, delPn));
     setSelEl(null);
     setEditingId(null);
     setSelPage(prev => {
@@ -897,6 +1326,8 @@ function App() {
     setImageEdits(prev => remapPageKeyedStateInsert(prev, insert1Based));
     setAddedImages(prev => remapPageKeyedStateInsert(prev, insert1Based));
     setAddedVideos(prev => remapPageKeyedStateInsert(prev, insert1Based));
+    setAddedTables(prev => remapPageKeyedStateInsert(prev, insert1Based));
+    setAddedRichTexts(prev => remapPageKeyedStateInsert(prev, insert1Based));
     setSelEl(null);
     setEditingId(null);
     setSelPage(insertIdx);
@@ -907,7 +1338,7 @@ function App() {
     Object.values(addedVideosRef.current).flat().forEach(v => { if (v?.src?.startsWith('blob:')) URL.revokeObjectURL(v.src); });
     setLoading(true); setProgress(0); setDoneCount(0);
     setFileName(file.name); setPages([]); setSelPage(0); setSelEl(null); setEdits({}); setEditingId(null);
-    setImageEdits({}); setAddedImages({}); setAddedVideos({});
+    setImageEdits({}); setAddedImages({}); setAddedVideos({}); setAddedTables({}); setAddedRichTexts({});
     historyStackRef.current = []; redoStackRef.current = []; setHistoryUi(u => u + 1);
     try {
       const buf = await file.arrayBuffer();
@@ -964,8 +1395,8 @@ function App() {
       ...prev,
       [pn]: [...(prev[pn] || []), { id, type: 'image', x, y, w, h, src, _userAdded: true }],
     }));
-    setShowOverlay(true);
-    setOverlay('images');
+    setEditorMode('edit');
+    setActiveAddTool('image');
   }, [pages, selPage, captureBeforeChange]);
 
   const handleAddImageFile = useCallback((file) => addImageFromFile(file), [addImageFromFile]);
@@ -993,8 +1424,8 @@ function App() {
       ...prev,
       [pn]: [...(prev[pn] || []), { id, type: 'video', x, y, w, h, src, _userAdded: true }],
     }));
-    setShowOverlay(true);
-    setOverlay('images');
+    setEditorMode('edit');
+    setActiveAddTool('video');
   }, [pages, selPage, captureBeforeChange]);
 
   const handleAddVideoFile = useCallback((file) => addVideoFromFile(file), [addVideoFromFile]);
@@ -1020,6 +1451,172 @@ function App() {
     const pn = pg.pageNum;
     if (el.src?.startsWith('blob:')) URL.revokeObjectURL(el.src);
     setAddedVideos(prev => ({
+      ...prev,
+      [pn]: (prev[pn] || []).filter(a => a.id !== el.id),
+    }));
+    setSelEl(null);
+  }, [pages, selPage, captureBeforeChange]);
+
+  const addDynamicTable = useCallback(() => {
+    const pg = pages[selPage];
+    if (!pg) return;
+    captureBeforeChange();
+    const pn = pg.pageNum;
+    const id = `tbl_${pn}_${Date.now()}`;
+    const rows = 4;
+    const cols = 3;
+    const w = Math.min(340, Math.max(120, pg.width * 0.5));
+    const h = Math.min(220, Math.max(80, pg.height * 0.28));
+    const x = Math.max(8, (pg.width - w) / 2);
+    const y = Math.max(8, (pg.height - h) / 2);
+    const tbl = { id, type: 'table', x, y, w, h, rows, cols, cells: ensureTableCells(rows, cols), _userAdded: true };
+    setAddedTables(prev => ({
+      ...prev,
+      [pn]: [...(prev[pn] || []), tbl],
+    }));
+    setEditorMode('edit');
+    setActiveAddTool('table');
+    setSelEl(tbl);
+  }, [pages, selPage, captureBeforeChange]);
+
+  const patchTable = useCallback((el, patch) => {
+    const pg = pages[selPage];
+    if (!pg || el.type !== 'table') return;
+    captureBeforeChange();
+    const pn = pg.pageNum;
+    setAddedTables(prev => ({
+      ...prev,
+      [pn]: (prev[pn] || []).map(t => {
+        if (t.id !== el.id) return t;
+        const next = { ...t, ...patch };
+        if (patch.rows != null || patch.cols != null) {
+          const r = patch.rows != null ? patch.rows : t.rows;
+          const c = patch.cols != null ? patch.cols : t.cols;
+          next.cells = ensureTableCells(r, c, t.cells);
+        }
+        return next;
+      }),
+    }));
+    setSelEl(prev => {
+      if (prev?.id !== el.id || prev?.type !== 'table') return prev;
+      const merged = { ...prev, ...patch };
+      if (patch.rows != null || patch.cols != null) {
+        const r = patch.rows != null ? patch.rows : prev.rows;
+        const c = patch.cols != null ? patch.cols : prev.cols;
+        merged.cells = ensureTableCells(r, c, prev.cells);
+      }
+      return merged;
+    });
+  }, [pages, selPage, captureBeforeChange]);
+
+  const tableUndoGateRef = useRef({ tableId: null, armed: false });
+  const placedTextUndoGateRef = useRef(null);
+
+  const updateTableCellHtml = useCallback((tableId, ri, ci, innerHtml) => {
+    const pg = pages[selPage];
+    if (!pg) return;
+    const pn = pg.pageNum;
+    setAddedTables(prev => ({
+      ...prev,
+      [pn]: (prev[pn] || []).map(t => {
+        if (t.id !== tableId) return t;
+        const cells = ensureTableCells(t.rows, t.cols, t.cells);
+        cells[ri][ci] = innerHtml;
+        return { ...t, cells };
+      }),
+    }));
+    setSelEl(prev => {
+      if (prev?.id !== tableId || prev?.type !== 'table') return prev;
+      const cells = ensureTableCells(prev.rows, prev.cols, prev.cells);
+      cells[ri][ci] = innerHtml;
+      return { ...prev, cells };
+    });
+  }, [pages, selPage]);
+
+  const onPlacedTableCellFocus = useCallback((tableId) => {
+    if (tableUndoGateRef.current.tableId !== tableId) {
+      captureBeforeChange();
+      tableUndoGateRef.current = { tableId, armed: true };
+    }
+  }, [captureBeforeChange]);
+
+  const onPlacedUserTextFocus = useCallback((id) => {
+    if (placedTextUndoGateRef.current !== id) {
+      captureBeforeChange();
+    }
+    placedTextUndoGateRef.current = id;
+  }, [captureBeforeChange]);
+
+  const updateUserTextHtml = useCallback((id, innerHtml) => {
+    const pg = pages[selPage];
+    if (!pg) return;
+    const pn = pg.pageNum;
+    setAddedRichTexts(prev => ({
+      ...prev,
+      [pn]: (prev[pn] || []).map(b => (b.id === id ? { ...b, html: innerHtml } : b)),
+    }));
+    setSelEl(prev => (prev?.id === id && prev?.type === 'userText' ? { ...prev, html: innerHtml } : prev));
+  }, [pages, selPage]);
+
+  const patchUserTextBlock = useCallback((el, patch) => {
+    if (el.type !== 'userText') return;
+    captureBeforeChange();
+    const pg = pages[selPage];
+    const pn = pg.pageNum;
+    setAddedRichTexts(prev => ({
+      ...prev,
+      [pn]: (prev[pn] || []).map(b => (b.id === el.id ? { ...b, ...patch } : b)),
+    }));
+    setSelEl(prev => (prev?.id === el.id ? { ...prev, ...patch } : prev));
+  }, [pages, selPage, captureBeforeChange]);
+
+  const handleRemoveUserText = useCallback((el) => {
+    if (el.type !== 'userText') return;
+    const pg = pages[selPage];
+    if (!pg) return;
+    captureBeforeChange();
+    const pn = pg.pageNum;
+    setAddedRichTexts(prev => ({
+      ...prev,
+      [pn]: (prev[pn] || []).filter(b => b.id !== el.id),
+    }));
+    setSelEl(null);
+    placedTextUndoGateRef.current = null;
+  }, [pages, selPage, captureBeforeChange]);
+
+  const addRichTextBlock = useCallback(() => {
+    const pg = pages[selPage];
+    if (!pg) return;
+    captureBeforeChange();
+    const pn = pg.pageNum;
+    const id = `rtxt_${pn}_${Date.now()}`;
+    const w = Math.min(380, Math.max(200, pg.width * 0.5));
+    const h = Math.min(280, Math.max(100, pg.height * 0.24));
+    const x = Math.max(8, (pg.width - w) / 2);
+    const y = Math.max(8, (pg.height - h) / 2);
+    const block = {
+      id,
+      type: 'userText',
+      x, y, w, h,
+      html: '<p>Type here…</p>',
+      _userAdded: true,
+    };
+    setAddedRichTexts(prev => ({
+      ...prev,
+      [pn]: [...(prev[pn] || []), block],
+    }));
+    setEditorMode('edit');
+    setActiveAddTool('userText');
+    placedTextUndoGateRef.current = id;
+    setSelEl(block);
+  }, [pages, selPage, captureBeforeChange]);
+
+  const handleRemoveTable = useCallback((el) => {
+    const pg = pages[selPage];
+    if (!pg) return;
+    captureBeforeChange();
+    const pn = pg.pageNum;
+    setAddedTables(prev => ({
       ...prev,
       [pn]: (prev[pn] || []).filter(a => a.id !== el.id),
     }));
@@ -1067,6 +1664,7 @@ function App() {
     let file = await imageFileFromDataTransfer(e.dataTransfer);
     if (!file) file = Array.from(e.dataTransfer.files || []).find(isLikelyVideoFile) || null;
     if (!file) return;
+    setEditorMode('edit');
     const inner = pageStageRef.current;
     const pgLocal = pages[selPage];
     if (!inner || !pgLocal) return;
@@ -1109,6 +1707,64 @@ function App() {
         elId: el.id,
         pn,
         mediaKind: 'video',
+        grabDx: px - ob.x,
+        grabDy: py - ob.y,
+        pw: pg.width,
+        ph: pg.height,
+        elW: el.w,
+        elH: el.h,
+        startPx: px,
+        startPy: py,
+        latestNX: ob.x,
+        latestNY: ob.y,
+        moved: false,
+        captured: false,
+      };
+      setDraggingImageId(el.id);
+      e.currentTarget.setPointerCapture(e.pointerId);
+      return;
+    }
+    if (el.type === 'table') {
+      e.stopPropagation();
+      const pg = pages[selPage];
+      if (!pg) return;
+      const pn = pg.pageNum;
+      const ob = { x: el.x, y: el.y, w: el.w, h: el.h };
+      const { x: px, y: py } = clientToPageCoords(e.clientX, e.clientY);
+      imageDragRef.current = {
+        pointerId: e.pointerId,
+        elId: el.id,
+        pn,
+        mediaKind: 'table',
+        grabDx: px - ob.x,
+        grabDy: py - ob.y,
+        pw: pg.width,
+        ph: pg.height,
+        elW: el.w,
+        elH: el.h,
+        startPx: px,
+        startPy: py,
+        latestNX: ob.x,
+        latestNY: ob.y,
+        moved: false,
+        captured: false,
+      };
+      setDraggingImageId(el.id);
+      e.currentTarget.setPointerCapture(e.pointerId);
+      return;
+    }
+    if (el.type === 'userText') {
+      e.stopPropagation();
+      const pg = pages[selPage];
+      if (!pg) return;
+      const pn = pg.pageNum;
+      const ob = { x: el.x, y: el.y, w: el.w, h: el.h };
+      const { x: px, y: py } = clientToPageCoords(e.clientX, e.clientY);
+      imageDragRef.current = {
+        pointerId: e.pointerId,
+        elId: el.id,
+        pn,
+        mediaKind: 'userText',
         grabDx: px - ob.x,
         grabDy: py - ob.y,
         pw: pg.width,
@@ -1186,6 +1842,24 @@ function App() {
         [d.pn]: (prev[d.pn] || []).map(a => (a.id === d.elId ? { ...a, x: nx, y: ny } : a)),
       }));
       setSelEl(prev => (prev && prev.id === d.elId && prev.type === 'video' ? { ...prev, x: nx, y: ny } : prev));
+      return;
+    }
+
+    if (d.mediaKind === 'table') {
+      setAddedTables(prev => ({
+        ...prev,
+        [d.pn]: (prev[d.pn] || []).map(a => (a.id === d.elId ? { ...a, x: nx, y: ny } : a)),
+      }));
+      setSelEl(prev => (prev && prev.id === d.elId && prev.type === 'table' ? { ...prev, x: nx, y: ny } : prev));
+      return;
+    }
+
+    if (d.mediaKind === 'userText') {
+      setAddedRichTexts(prev => ({
+        ...prev,
+        [d.pn]: (prev[d.pn] || []).map(a => (a.id === d.elId ? { ...a, x: nx, y: ny } : a)),
+      }));
+      setSelEl(prev => (prev && prev.id === d.elId && prev.type === 'userText' ? { ...prev, x: nx, y: ny } : prev));
       return;
     }
 
@@ -1330,14 +2004,17 @@ function App() {
 
   const pg = pages[selPage];
   const pageEdits = edits[pg?.pageNum] || {};
+  const userTextForInspector = pg && selEl?.type === 'userText'
+    ? ((addedRichTexts[pg.pageNum] || []).find(b => b.id === selEl.id) || selEl)
+    : null;
 
-  // Which elements to show in overlay (includes user-placed images)
+  // Edit mode: overlay for text, shapes, images, videos (tables rendered above with z-index for cell editing)
   const overlayEls = pg ? [
-    ...(overlay === 'text' || overlay === 'all' ? pg.textElements : []),
-    ...(overlay === 'shapes' || overlay === 'all' ? pg.shapes : []),
-    ...(overlay === 'images' || overlay === 'all' ? pg.images : []),
-    ...(overlay === 'images' || overlay === 'all' ? (addedImages[pg.pageNum] || []) : []),
-    ...(overlay === 'images' || overlay === 'all' ? (addedVideos[pg.pageNum] || []) : []),
+    ...pg.textElements,
+    ...pg.shapes,
+    ...pg.images,
+    ...(addedImages[pg.pageNum] || []),
+    ...(addedVideos[pg.pageNum] || []),
   ] : [];
 
   // Text elements that have been edited on this page
@@ -1406,7 +2083,6 @@ function App() {
 
         {/* Toolbar */}
         <div style={{ minHeight: 64, background: '#ffffff', borderBottom: '1px solid #e8ecf0', display: 'flex', alignItems: 'center', padding: '12px 16px', gap: 8, flexShrink: 0, flexWrap: 'wrap', rowGap: 8 }}>
-          <span style={{ fontSize: 11, color: '#555' }}>Page {pg?.pageNum}/{pages.length}</span>
           {(totalEdits + totalImageMods) > 0 && (
             <span style={{ fontSize: 10, background: 'rgba(245,158,11,0.15)', color: '#F59E0B', padding: '2px 7px', borderRadius: 10, border: '1px solid rgba(245,158,11,0.3)' }}>
               {totalEdits > 0 && `${totalEdits} text`}
@@ -1418,15 +2094,15 @@ function App() {
           <div style={{ flex: 1 }} />
 
           <div style={{ width: 1, height: 26, background: '#d1d9e0' }} />
-          <button type="button" title="Undo (⌘Z / Ctrl+Z)" aria-label="Undo" onClick={undo} disabled={!canUndo} style={{ width: 36, height: 36, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: canUndo ? '#e8ecf0' : '#f1f5f9', color: canUndo ? '#334155' : '#94a3b8', border: '1px solid #d1d9e0', borderRadius: 8, cursor: canUndo ? 'pointer' : 'not-allowed' }}><IconUndo /></button>
-          <button type="button" title="Redo (⌘⇧Z / Ctrl+Y)" aria-label="Redo" onClick={redo} disabled={!canRedo} style={{ width: 36, height: 36, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: canRedo ? '#e8ecf0' : '#f1f5f9', color: canRedo ? '#334155' : '#94a3b8', border: '1px solid #d1d9e0', borderRadius: 8, cursor: canRedo ? 'pointer' : 'not-allowed' }}><IconRedo /></button>
+          <button type="button" title="Undo (⌘Z / Ctrl+Z)" aria-label="Undo" onClick={undo} disabled={!canUndo} style={{ width: 36, height: 36, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: canUndo ? 'rgba(42,172,184,0.14)' : '#f1f5f9', color: canUndo ? '#0f766e' : '#94a3b8', border: `1px solid ${canUndo ? 'rgba(42,172,184,0.45)' : '#d1d9e0'}`, borderRadius: 8, cursor: canUndo ? 'pointer' : 'not-allowed' }}><IconUndo /></button>
+          <button type="button" title="Redo (⌘⇧Z / Ctrl+Y)" aria-label="Redo" onClick={redo} disabled={!canRedo} style={{ width: 36, height: 36, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: canRedo ? 'rgba(42,172,184,0.14)' : '#f1f5f9', color: canRedo ? '#0f766e' : '#94a3b8', border: `1px solid ${canRedo ? 'rgba(42,172,184,0.45)' : '#d1d9e0'}`, borderRadius: 8, cursor: canRedo ? 'pointer' : 'not-allowed' }}><IconRedo /></button>
 
           <div style={{ width: 1, height: 26, background: '#d1d9e0' }} />
           <button type="button" onClick={() => {
             Object.values(addedVideosRef.current).flat().forEach(v => { if (v?.src?.startsWith('blob:')) URL.revokeObjectURL(v.src); });
-            setPages([]); setTemplates([]); setTokens({ colors: [], fonts: [], sizes: [] }); setEdits({}); setImageEdits({}); setAddedImages({}); setAddedVideos({});
+            setPages([]); setTemplates([]); setTokens({ colors: [], fonts: [], sizes: [] }); setEdits({}); setImageEdits({}); setAddedImages({}); setAddedVideos({}); setAddedTables({}); setAddedRichTexts({});
             historyStackRef.current = []; redoStackRef.current = []; setHistoryUi(u => u + 1);
-          }} style={{ padding: '5px 9px', background: '#e8ecf0', color: '#666', border: '1px solid #d1d9e0', borderRadius: 5, fontSize: 11, cursor: 'pointer' }}>New</button>
+          }} style={{ padding: '5px 9px', background: 'rgba(42,172,184,0.1)', color: '#0f766e', border: '1px solid rgba(42,172,184,0.35)', borderRadius: 5, fontSize: 11, cursor: 'pointer', fontWeight: 600 }}>New</button>
         </div>
 
         {/* Page canvas + overlays */}
@@ -1438,7 +2114,13 @@ function App() {
             outlineOffset: -4,
             background: viewerImageDropActive ? 'rgba(42,172,184,0.08)' : 'transparent',
           }}
-          onClick={() => { if (!editingId) setSelEl(null); }}
+          onClick={() => {
+            if (!editingId) {
+              setSelEl(null);
+              tableUndoGateRef.current = { tableId: null, armed: false };
+              placedTextUndoGateRef.current = null;
+            }
+          }}
           onDragOver={handleViewerDragOver}
           onDragEnter={handleViewerDragEnter}
           onDragLeave={handleViewerDragLeave}
@@ -1485,7 +2167,9 @@ function App() {
                   color: '#222',
                   padding: '1px 2px',
                 }}>
-                  {newText}
+                  {isProbablyHtml(newText)
+                    ? <span dangerouslySetInnerHTML={{ __html: newText }} />
+                    : newText}
                 </div>
               );
             })}
@@ -1499,15 +2183,16 @@ function App() {
                   el={el}
                   bgColor={pg.bgColor}
                   initialValue={pageEdits[el.id] ?? el.content}
+                  fontChoices={tokens.fonts}
                   onSave={val => { setEdit(pg.pageNum, el.id, val, 'commit'); setEditingId(null); }}
                   onCancel={() => setEditingId(null)}
                 />
               );
             })()}
 
-            {/* ── Element overlay boxes ── */}
-            {showOverlay && pg && (
-              <div style={{ position: 'absolute', top: 0, left: 0, width: pg.width, height: pg.height, pointerEvents: 'none' }}>
+            {/* ── Element overlay boxes (edit mode only; view = read-only canvas) ── */}
+            {editorMode === 'edit' && pg && (
+              <div style={{ position: 'absolute', top: 0, left: 0, width: pg.width, height: pg.height, pointerEvents: 'none', zIndex: 1 }}>
                 {overlayEls.map((el, idx) => {
                   const bord = el.type === 'text' ? '#2AACB8' : el.type === 'image' ? '#F59E0B' : el.type === 'video' ? '#6366F1' : '#8B5CF6';
                   const bg = el.type === 'text' ? 'rgba(42,172,184,0.1)' : el.type === 'image' ? 'rgba(245,158,11,0.1)' : el.type === 'video' ? 'rgba(99,102,241,0.12)' : 'rgba(139,92,246,0.1)';
@@ -1533,7 +2218,7 @@ function App() {
                         }
                         setSelEl(active ? null : el);
                       }}
-                      onDoubleClick={e => { e.stopPropagation(); if (el.type === 'text') { setSelEl(el); setEditingId(el.id); } }}
+                      onDoubleClick={e => { e.stopPropagation(); if (editorMode !== 'edit') return; if (el.type === 'text') { setSelEl(el); setEditingId(el.id); } }}
                       onPointerDown={placementDrag ? e => onImagePointerDown(e, el) : undefined}
                       onPointerMove={placementDrag ? onImagePointerMove : undefined}
                       onPointerUp={placementDrag ? onImagePointerUp : undefined}
@@ -1555,6 +2240,156 @@ function App() {
                 })}
               </div>
             )}
+
+            {/* Placed tables (z-index above overlay so cells receive focus & typing) */}
+            {pg && (addedTables[pg.pageNum] || []).map(t => {
+              const selected = selEl?.id === t.id;
+              const readOnly = editorMode !== 'edit';
+              return (
+                <div
+                  key={t.id}
+                  style={{
+                    position: 'absolute',
+                    left: t.x,
+                    top: t.y,
+                    width: t.w,
+                    height: t.h,
+                    zIndex: 2,
+                    overflow: 'hidden',
+                    borderRadius: 2,
+                    boxShadow: '0 1px 3px rgba(15,23,42,0.06)',
+                    boxSizing: 'border-box',
+                    outline: selected ? '2px solid #059669' : 'none',
+                    pointerEvents: readOnly ? 'none' : 'auto',
+                  }}
+                  onMouseDown={e => e.stopPropagation()}
+                  onClick={e => {
+                    e.stopPropagation();
+                    setSelEl(t);
+                    setEditingId(null);
+                  }}
+                >
+                  {!readOnly && (
+                    <div
+                      role="presentation"
+                      onPointerDown={e => { e.stopPropagation(); onImagePointerDown(e, t); }}
+                      onPointerMove={onImagePointerMove}
+                      onPointerUp={onImagePointerUp}
+                      onPointerCancel={onImagePointerUp}
+                      style={{
+                        height: 22,
+                        flexShrink: 0,
+                        touchAction: 'none',
+                        cursor: draggingImageId === t.id ? 'grabbing' : 'grab',
+                        background: 'linear-gradient(180deg, rgba(5,150,105,0.22), rgba(5,150,105,0.08))',
+                        borderBottom: '1px solid rgba(5,150,105,0.35)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 6,
+                        fontSize: 12,
+                        color: 'rgba(5,80,60,0.85)',
+                        fontWeight: 600,
+                        userSelect: 'none',
+                      }}
+                      title="Drag to move table"
+                    >
+                      <span aria-hidden style={{ letterSpacing: '-2px', opacity: 0.7 }}>⋮⋮</span>
+                      <span style={{ fontSize: 10 }}>Drag</span>
+                    </div>
+                  )}
+                  <div style={{ height: readOnly ? '100%' : 'calc(100% - 22px)', overflow: 'auto' }}>
+                    <PlacedTableGrid
+                      rows={t.rows}
+                      cols={t.cols}
+                      cells={t.cells}
+                      readOnly={readOnly}
+                      onCellHtmlInput={(ri, ci, h) => updateTableCellHtml(t.id, ri, ci, h)}
+                      onCellFocus={() => onPlacedTableCellFocus(t.id)}
+                    />
+                  </div>
+                </div>
+              );
+            })}
+
+            {/* Placed rich text (same stacking as tables) */}
+            {pg && (addedRichTexts[pg.pageNum] || []).map(rt => {
+              const selected = selEl?.id === rt.id;
+              const readOnly = editorMode !== 'edit';
+              return (
+                <div
+                  key={rt.id}
+                  style={{
+                    position: 'absolute',
+                    left: rt.x,
+                    top: rt.y,
+                    width: rt.w,
+                    height: rt.h,
+                    zIndex: 2,
+                    overflow: 'hidden',
+                    borderRadius: 2,
+                    boxShadow: '0 1px 3px rgba(15,23,42,0.06)',
+                    boxSizing: 'border-box',
+                    outline: selected ? '2px solid #2AACB8' : 'none',
+                    pointerEvents: readOnly ? 'none' : 'auto',
+                    background: '#ffffff',
+                    display: 'flex',
+                    flexDirection: 'column',
+                  }}
+                  onMouseDown={e => e.stopPropagation()}
+                  onClick={e => {
+                    e.stopPropagation();
+                    setSelEl(rt);
+                    setEditingId(null);
+                  }}
+                >
+                  {!readOnly && (
+                    <div
+                      role="presentation"
+                      onPointerDown={e => { e.stopPropagation(); onImagePointerDown(e, rt); }}
+                      onPointerMove={onImagePointerMove}
+                      onPointerUp={onImagePointerUp}
+                      onPointerCancel={onImagePointerUp}
+                      style={{
+                        height: 22,
+                        flexShrink: 0,
+                        touchAction: 'none',
+                        cursor: draggingImageId === rt.id ? 'grabbing' : 'grab',
+                        background: 'linear-gradient(180deg, rgba(42,172,184,0.22), rgba(42,172,184,0.08))',
+                        borderBottom: '1px solid rgba(42,172,184,0.35)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 6,
+                        fontSize: 12,
+                        color: 'rgba(15,80,90,0.9)',
+                        fontWeight: 600,
+                        userSelect: 'none',
+                      }}
+                      title="Drag to move · or hold Alt (⌥) and drag inside the text"
+                    >
+                      <span aria-hidden style={{ letterSpacing: '-2px', opacity: 0.7 }}>⋮⋮</span>
+                      <span style={{ fontSize: 10 }}>Drag</span>
+                    </div>
+                  )}
+                  <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
+                    <PlacedUserTextBody
+                      html={rt.html}
+                      readOnly={readOnly}
+                      onHtmlChange={h => updateUserTextHtml(rt.id, h)}
+                      onFocusFirstEdit={() => onPlacedUserTextFocus(rt.id)}
+                      onPointerMove={onImagePointerMove}
+                      onPointerUp={onImagePointerUp}
+                      onPointerCancel={onImagePointerUp}
+                      onAltDragPointerDown={e => {
+                        e.stopPropagation();
+                        onImagePointerDown(e, rt);
+                      }}
+                    />
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
       </div>
@@ -1585,52 +2420,162 @@ function App() {
         </div>
 
         <div style={{ marginBottom: 16, paddingBottom: 16, borderBottom: '1px solid #e8ecf0' }}>
-          <div style={{ fontSize: 10, fontWeight: 700, color: '#64748b', letterSpacing: '0.07em', textTransform: 'uppercase', marginBottom: 10 }}>Mode</div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
-            {OVERLAY_MODE_ICONS.map(([v, label, IconComp]) => {
-              const active = v === 'off' ? !showOverlay : (showOverlay && overlay === v);
-              return (
-                <button
-                  key={v}
-                  type="button"
-                  title={label}
-                  aria-label={label}
-                  aria-pressed={active}
-                  onClick={() => { if (v === 'off') { setShowOverlay(false); } else { setShowOverlay(true); setOverlay(v); } }}
-                  style={{
-                    width: 40,
-                    height: 40,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    borderRadius: 8,
-                    border: `1px solid ${active ? '#2AACB8' : '#d1d9e0'}`,
-                    background: active ? '#2AACB8' : '#f8fafc',
-                    color: active ? '#fff' : '#475569',
-                    cursor: 'pointer',
-                    transition: 'background 0.15s, border-color 0.15s, color 0.15s',
-                  }}
-                >
-                  <IconComp />
-                </button>
-              );
-            })}
+          <div style={{ fontSize: 10, fontWeight: 700, color: '#64748b', letterSpacing: '0.07em', textTransform: 'uppercase', marginBottom: 10 }}>Workspace</div>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <button
+              type="button"
+              title="View — read without selection outlines"
+              aria-label="View mode"
+              aria-pressed={editorMode === 'view'}
+              onClick={() => { setEditorMode('view'); setEditingId(null); setSelEl(null); }}
+              style={{
+                flex: 1,
+                height: 40,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 6,
+                borderRadius: 8,
+                border: `1px solid ${editorMode === 'view' ? '#6366f1' : 'rgba(99,102,241,0.35)'}`,
+                background: editorMode === 'view' ? '#6366f1' : 'rgba(99,102,241,0.1)',
+                color: editorMode === 'view' ? '#fff' : '#4338ca',
+                cursor: 'pointer',
+                fontSize: 12,
+                fontWeight: 600,
+                transition: 'background 0.15s, border-color 0.15s, color 0.15s',
+              }}
+            >
+              <IconView />
+              View
+            </button>
+            <button
+              type="button"
+              title="Edit — select elements, text, shapes, images, and placed content"
+              aria-label="Edit mode"
+              aria-pressed={editorMode === 'edit'}
+              onClick={() => setEditorMode('edit')}
+              style={{
+                flex: 1,
+                height: 40,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 6,
+                borderRadius: 8,
+                border: `1px solid ${editorMode === 'edit' ? '#2AACB8' : 'rgba(42,172,184,0.4)'}`,
+                background: editorMode === 'edit' ? '#2AACB8' : 'rgba(42,172,184,0.12)',
+                color: editorMode === 'edit' ? '#fff' : '#0f766e',
+                cursor: 'pointer',
+                fontSize: 12,
+                fontWeight: 600,
+                transition: 'background 0.15s, border-color 0.15s, color 0.15s',
+              }}
+            >
+              <IconEdit />
+              Edit
+            </button>
           </div>
         </div>
 
         <div style={{ marginBottom: 16, paddingBottom: 16, borderBottom: '1px solid #e8ecf0' }}>
           <div style={{ fontSize: 10, fontWeight: 700, color: '#64748b', letterSpacing: '0.07em', textTransform: 'uppercase', marginBottom: 10 }}>Add to page</div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <button type="button" title="Add image" aria-label="Add image" onClick={() => addImageInputRef.current?.click()}
-              style={{ width: 44, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 10, border: '1px solid #d1d9e0', background: '#f8fafc', color: '#334155', cursor: 'pointer' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              title={editorMode === 'view' ? 'Switch to Edit to add content' : 'Add image'}
+              aria-label="Add image"
+              disabled={editorMode === 'view'}
+              onClick={() => { if (editorMode === 'view') return; setActiveAddTool('image'); addImageInputRef.current?.click(); }}
+              style={{
+                width: 44,
+                height: 44,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderRadius: 10,
+                border: `1.5px solid ${activeAddTool === 'image' ? '#2AACB8' : 'rgba(42,172,184,0.45)'}`,
+                background: activeAddTool === 'image' ? '#2AACB8' : 'rgba(42,172,184,0.14)',
+                color: activeAddTool === 'image' ? '#fff' : '#0f766e',
+                cursor: editorMode === 'view' ? 'not-allowed' : 'pointer',
+                opacity: editorMode === 'view' ? 0.45 : 1,
+                transition: 'background 0.15s, border-color 0.15s, color 0.15s',
+              }}
+            >
               <IconAddImage />
             </button>
-            <button type="button" title="Add video" aria-label="Add video" onClick={() => addVideoInputRef.current?.click()}
-              style={{ width: 44, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 10, border: '1px solid #d1d9e0', background: '#f8fafc', color: '#4338ca', cursor: 'pointer' }}>
+            <button
+              type="button"
+              title={editorMode === 'view' ? 'Switch to Edit to add content' : 'Add rich text box'}
+              aria-label="Add text"
+              disabled={editorMode === 'view'}
+              onClick={() => { if (editorMode === 'view') return; addRichTextBlock(); }}
+              style={{
+                width: 44,
+                height: 44,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderRadius: 10,
+                border: `1.5px solid ${activeAddTool === 'userText' ? '#0d9488' : 'rgba(13,148,136,0.45)'}`,
+                background: activeAddTool === 'userText' ? '#0d9488' : 'rgba(13,148,136,0.12)',
+                color: activeAddTool === 'userText' ? '#fff' : '#0f766e',
+                cursor: editorMode === 'view' ? 'not-allowed' : 'pointer',
+                opacity: editorMode === 'view' ? 0.45 : 1,
+                transition: 'background 0.15s, border-color 0.15s, color 0.15s',
+              }}
+            >
+              <IconAddText />
+            </button>
+            <button
+              type="button"
+              title={editorMode === 'view' ? 'Switch to Edit to add content' : 'Add video'}
+              aria-label="Add video"
+              disabled={editorMode === 'view'}
+              onClick={() => { if (editorMode === 'view') return; setActiveAddTool('video'); addVideoInputRef.current?.click(); }}
+              style={{
+                width: 44,
+                height: 44,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderRadius: 10,
+                border: `1.5px solid ${activeAddTool === 'video' ? '#4f46e5' : 'rgba(79,70,229,0.45)'}`,
+                background: activeAddTool === 'video' ? '#4f46e5' : 'rgba(79,70,229,0.12)',
+                color: activeAddTool === 'video' ? '#fff' : '#4338ca',
+                cursor: editorMode === 'view' ? 'not-allowed' : 'pointer',
+                opacity: editorMode === 'view' ? 0.45 : 1,
+                transition: 'background 0.15s, border-color 0.15s, color 0.15s',
+              }}
+            >
               <IconAddVideo />
             </button>
+            <button
+              type="button"
+              title={editorMode === 'view' ? 'Switch to Edit to add content' : 'Add dynamic table'}
+              aria-label="Add dynamic table"
+              disabled={editorMode === 'view'}
+              onClick={() => { if (editorMode === 'view') return; addDynamicTable(); }}
+              style={{
+                width: 44,
+                height: 44,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderRadius: 10,
+                border: `1.5px solid ${activeAddTool === 'table' ? '#059669' : 'rgba(5,150,105,0.45)'}`,
+                background: activeAddTool === 'table' ? '#059669' : 'rgba(5,150,105,0.12)',
+                color: activeAddTool === 'table' ? '#fff' : '#047857',
+                cursor: editorMode === 'view' ? 'not-allowed' : 'pointer',
+                opacity: editorMode === 'view' ? 0.45 : 1,
+                transition: 'background 0.15s, border-color 0.15s, color 0.15s',
+              }}
+            >
+              <IconAddTable />
+            </button>
           </div>
-          <p style={{ fontSize: 10, color: '#94a3b8', margin: '10px 0 0', lineHeight: 1.45 }}>Adds centered on the current page. Drag on the page to move. Drop files on the canvas to add or replace.</p>
+          <p style={{ fontSize: 10, color: '#94a3b8', margin: '10px 0 0', lineHeight: 1.45 }}>
+            Image, rich text, video, or table is added centered on the current page. Use the text box for full font and formatting controls. Drag the colored top strip to move. Drop files on the canvas to add or replace images/videos.
+          </p>
         </div>
 
         <div style={{ marginBottom: 16, paddingBottom: 16, borderBottom: '1px solid #e8ecf0' }}>
@@ -1693,8 +2638,16 @@ function App() {
               {((pageEdits[selEl.id] !== undefined && selEl.type === 'text') || (selEl.type === 'image' && (imageEdits[pg.pageNum]?.[selEl.id]?.src || imageEdits[pg.pageNum]?.[selEl.id]?.removed))) && (
                 <span style={{ fontSize: 9, background: 'rgba(245,158,11,0.15)', color: '#F59E0B', padding: '2px 6px', borderRadius: 4, border: '1px solid rgba(245,158,11,0.3)' }}>EDITED</span>
               )}
-              {(selEl.type === 'image' || selEl.type === 'video') && selEl._userAdded && (
-                <span style={{ fontSize: 9, background: selEl.type === 'video' ? 'rgba(99,102,241,0.12)' : 'rgba(42,172,184,0.12)', color: selEl.type === 'video' ? '#4338ca' : '#0f766e', padding: '2px 6px', borderRadius: 4, border: selEl.type === 'video' ? '1px solid rgba(99,102,241,0.3)' : '1px solid rgba(42,172,184,0.3)' }}>PLACED</span>
+              {(selEl.type === 'image' || selEl.type === 'video' || selEl.type === 'table' || selEl.type === 'userText') && selEl._userAdded && (
+                <span style={{
+                  fontSize: 9,
+                  background: selEl.type === 'video' ? 'rgba(99,102,241,0.12)' : selEl.type === 'table' ? 'rgba(5,150,105,0.12)' : selEl.type === 'userText' ? 'rgba(13,148,136,0.14)' : 'rgba(42,172,184,0.12)',
+                  color: selEl.type === 'video' ? '#4338ca' : selEl.type === 'table' ? '#047857' : '#0f766e',
+                  padding: '2px 6px',
+                  borderRadius: 4,
+                  border: selEl.type === 'video' ? '1px solid rgba(99,102,241,0.3)' : selEl.type === 'table' ? '1px solid rgba(5,150,105,0.3)' : selEl.type === 'userText' ? '1px solid rgba(13,148,136,0.35)' : '1px solid rgba(42,172,184,0.3)',
+                }}
+                >PLACED</span>
               )}
               <button onClick={() => setSelEl(null)} style={{ marginLeft: 'auto', background: 'none', border: 'none', color: '#444', cursor: 'pointer', fontSize: 20, lineHeight: 1 }}>×</button>
             </div>
@@ -1702,22 +2655,18 @@ function App() {
             {/* ── TEXT EDITING ── */}
             {selEl.type === 'text' && (
               <Section title="Edit Text">
-                <textarea
-                  value={pageEdits[selEl.id] ?? selEl.content}
-                  onChange={e => setEdit(pg.pageNum, selEl.id, e.target.value)}
-                  placeholder="Edit text content..."
-                  style={{
-                    width: '100%', minHeight: 72, background: '#ffffff', border: '1px solid #2AACB8',
-                    borderRadius: 6, color: '#0f172a', fontSize: 12, padding: '8px 10px',
-                    resize: 'vertical', fontFamily: selEl.style.fontFamily || 'inherit',
-                    lineHeight: 1.5, outline: 'none',
-                  }}
+                <RichTextEditorBlock
+                  html={pageEdits[selEl.id] ?? selEl.content}
+                  onHtmlChange={h => { if (editorMode !== 'edit') setEditorMode('edit'); setEdit(pg.pageNum, selEl.id, h); }}
+                  disabled={editorMode === 'view'}
+                  fontChoices={tokens.fonts}
+                  minHeight={96}
                 />
                 <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
                   <button onClick={() => { setEdit(pg.pageNum, selEl.id, selEl.content, 'commit'); }} style={{ flex: 1, padding: '5px 0', background: '#e8ecf0', color: '#888', border: '1px solid #d1d9e0', borderRadius: 5, fontSize: 10, cursor: 'pointer' }}>
                     Reset
                   </button>
-                  <button onClick={() => { setEditingId(selEl.id); }} style={{ flex: 1, padding: '5px 0', background: 'rgba(42,172,184,0.15)', color: '#2AACB8', border: '1px solid rgba(42,172,184,0.3)', borderRadius: 5, fontSize: 10, cursor: 'pointer' }}>
+                  <button onClick={() => { if (editorMode !== 'edit') setEditorMode('edit'); setEditingId(selEl.id); }} style={{ flex: 1, padding: '5px 0', background: 'rgba(42,172,184,0.15)', color: '#2AACB8', border: '1px solid rgba(42,172,184,0.3)', borderRadius: 5, fontSize: 10, cursor: 'pointer' }}>
                     Edit on Page
                   </button>
                 </div>
@@ -1727,6 +2676,108 @@ function App() {
                     <div style={{ fontSize: 11, color: '#666', wordBreak: 'break-word' }}>{selEl.content}</div>
                   </div>
                 )}
+              </Section>
+            )}
+
+            {selEl.type === 'userText' && userTextForInspector && (
+              <Section title="Placed text">
+                {editorMode === 'edit' && (
+                  <div style={{ marginBottom: 10 }}>
+                    <RichTextToolbar disabled={false} fontChoices={tokens.fonts} />
+                    <p style={{ fontSize: 10, color: '#64748b', margin: '8px 0 0', lineHeight: 1.45 }}>
+                      Edit here or in the box on the page. Select text, then use the toolbar for fonts, sizes, colors, lists, and links.
+                    </p>
+                  </div>
+                )}
+                <RichTextEditorBlock
+                  html={userTextForInspector.html}
+                  onHtmlChange={h => { if (editorMode !== 'edit') setEditorMode('edit'); updateUserTextHtml(selEl.id, h); }}
+                  disabled={editorMode === 'view'}
+                  fontChoices={tokens.fonts}
+                  minHeight={120}
+                />
+                <div style={{ display: 'flex', gap: 10, marginTop: 10, marginBottom: 8, alignItems: 'center' }}>
+                  <label style={{ fontSize: 10, color: '#64748b', width: 44 }}>Width</label>
+                  <input
+                    type="number"
+                    min={80}
+                    max={2000}
+                    value={Math.round(userTextForInspector.w)}
+                    onChange={e => {
+                      const w = Math.min(2000, Math.max(80, Number.parseInt(e.target.value, 10) || 80));
+                      if (editorMode !== 'edit') setEditorMode('edit');
+                      patchUserTextBlock(selEl, { w });
+                    }}
+                    style={{ flex: 1, padding: '6px 8px', borderRadius: 6, border: '1px solid #d1d9e0', fontSize: 12 }}
+                  />
+                </div>
+                <div style={{ display: 'flex', gap: 10, marginBottom: 12, alignItems: 'center' }}>
+                  <label style={{ fontSize: 10, color: '#64748b', width: 44 }}>Height</label>
+                  <input
+                    type="number"
+                    min={60}
+                    max={2000}
+                    value={Math.round(userTextForInspector.h)}
+                    onChange={e => {
+                      const hh = Math.min(2000, Math.max(60, Number.parseInt(e.target.value, 10) || 60));
+                      if (editorMode !== 'edit') setEditorMode('edit');
+                      patchUserTextBlock(selEl, { h: hh });
+                    }}
+                    style={{ flex: 1, padding: '6px 8px', borderRadius: 6, border: '1px solid #d1d9e0', fontSize: 12 }}
+                  />
+                </div>
+                <button type="button" onClick={() => handleRemoveUserText(selEl)} style={{ width: '100%', padding: '8px 10px', background: '#fef2f2', color: '#b91c1c', border: '1px solid #fecaca', borderRadius: 6, fontSize: 11, cursor: 'pointer' }}>
+                  Remove from page
+                </button>
+              </Section>
+            )}
+
+            {selEl.type === 'table' && (
+              <Section title="Dynamic table">
+                {editorMode === 'edit' && (
+                  <div style={{ marginBottom: 10 }}>
+                    <RichTextToolbar disabled={false} fontChoices={tokens.fonts} />
+                    <p style={{ fontSize: 10, color: '#64748b', margin: '8px 0 0', lineHeight: 1.45 }}>
+                      Click a cell on the page, select text, then use the toolbar (bold, lists, colors, link, etc.).
+                    </p>
+                  </div>
+                )}
+                <p style={{ fontSize: 10, color: '#64748b', marginBottom: 10, lineHeight: 1.5 }}>
+                  Change how many rows and columns the grid has, or remove the table from the page. Drag the top strip on the page to move the table.
+                </p>
+                <div style={{ display: 'flex', gap: 10, marginBottom: 10, alignItems: 'center' }}>
+                  <label style={{ fontSize: 10, color: '#64748b', width: 44 }}>Rows</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={30}
+                    value={selEl.rows}
+                    onChange={(e) => {
+                      const r = Math.min(30, Math.max(1, parseInt(e.target.value, 10) || 1));
+                      if (editorMode !== 'edit') setEditorMode('edit');
+                      patchTable(selEl, { rows: r });
+                    }}
+                    style={{ flex: 1, padding: '6px 8px', borderRadius: 6, border: '1px solid #d1d9e0', fontSize: 12 }}
+                  />
+                </div>
+                <div style={{ display: 'flex', gap: 10, marginBottom: 12, alignItems: 'center' }}>
+                  <label style={{ fontSize: 10, color: '#64748b', width: 44 }}>Cols</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={30}
+                    value={selEl.cols}
+                    onChange={(e) => {
+                      const c = Math.min(30, Math.max(1, parseInt(e.target.value, 10) || 1));
+                      if (editorMode !== 'edit') setEditorMode('edit');
+                      patchTable(selEl, { cols: c });
+                    }}
+                    style={{ flex: 1, padding: '6px 8px', borderRadius: 6, border: '1px solid #d1d9e0', fontSize: 12 }}
+                  />
+                </div>
+                <button type="button" onClick={() => handleRemoveTable(selEl)} style={{ width: '100%', padding: '8px 10px', background: '#fef2f2', color: '#b91c1c', border: '1px solid #fecaca', borderRadius: 6, fontSize: 11, cursor: 'pointer' }}>
+                  Remove from page
+                </button>
               </Section>
             )}
 
@@ -1800,7 +2851,7 @@ function App() {
                     const origEl = pgData?.textElements.find(e => e.id === elId);
                     return (
                       <div key={elId} style={{ padding: '7px 8px', background: '#f4f6fa', borderRadius: 5, marginBottom: 5, border: '1px solid #d1d9e0', cursor: 'pointer' }}
-                        onClick={() => { const idx = pages.indexOf(pgData); if (idx >= 0) { setSelPage(idx); setSelEl(origEl); setShowOverlay(true); setOverlay('text'); } }}>
+                        onClick={() => { const idx = pages.indexOf(pgData); if (idx >= 0) { setSelPage(idx); setSelEl(origEl); setEditorMode('edit'); } }}>
                         <div style={{ fontSize: 9, color: '#64748b', marginBottom: 3 }}>Page {pn}</div>
                         <div style={{ fontSize: 10, color: '#888', marginBottom: 2 }}>Was: <span style={{ color: '#555' }}>{origEl?.content?.slice(0, 30) || '…'}</span></div>
                         <div style={{ fontSize: 10, color: '#2AACB8' }}>Now: <span style={{ color: '#334155' }}>{newText.slice(0, 30)}</span></div>
