@@ -59,6 +59,120 @@ function readFileAsDataURL(file) {
   });
 }
 
+/** macOS / some sources omit MIME type on drag; match common image extensions. */
+const IMAGE_EXT_RE = /\.(png|jpe?g|gif|webp|bmp|svg|heic|avif|ico)$/i;
+const VIDEO_EXT_RE = /\.(mp4|webm|mov|m4v|ogv)$/i;
+function isLikelyImageFile(f) {
+  if (!f) return false;
+  if (f.type && f.type.startsWith('image/')) return true;
+  if (IMAGE_EXT_RE.test(f.name || '')) return true;
+  return false;
+}
+function isLikelyVideoFile(f) {
+  if (!f) return false;
+  if (f.type && f.type.startsWith('video/')) return true;
+  if (VIDEO_EXT_RE.test(f.name || '')) return true;
+  return false;
+}
+
+function firstImageLikeFileFromDataTransfer(dt) {
+  if (!dt?.files?.length) return null;
+  return Array.from(dt.files).find(isLikelyImageFile) || null;
+}
+
+function decodeHtmlEntities(s) {
+  if (!s) return s;
+  const t = document.createElement('textarea');
+  t.innerHTML = s;
+  return t.value;
+}
+
+function absolutizeUrl(u) {
+  try {
+    return new URL(u, document.baseURI).href;
+  } catch {
+    return u;
+  }
+}
+
+/** When dragging a full image from a page (not a file), the browser often exposes a URL or HTML, not Files. */
+function extractImageUrlFromDataTransfer(dt) {
+  if (!dt) return null;
+  const uriList = dt.getData('text/uri-list');
+  if (uriList) {
+    const first = uriList.split(/\r?\n/).map(l => l.trim()).find(Boolean);
+    if (first && !first.startsWith('#') && (first.startsWith('http') || first.startsWith('data:image/'))) {
+      return first.startsWith('data:') ? first : absolutizeUrl(first);
+    }
+  }
+  const plain = dt.getData('text/plain')?.trim();
+  if (plain && (plain.startsWith('http') || plain.startsWith('data:image/'))) {
+    return plain.startsWith('data:') ? plain : absolutizeUrl(plain);
+  }
+  const html = dt.getData('text/html');
+  if (html) {
+    const m = html.match(/<img[^>]+src\s*=\s*["']([^"']+)["']/i);
+    if (m) return absolutizeUrl(decodeHtmlEntities(m[1]));
+    const m2 = html.match(/srcset\s*=\s*["']([^"']+)/i);
+    if (m2) {
+      const part = m2[1].split(',')[0].trim().split(/\s+/)[0];
+      if (part) return absolutizeUrl(decodeHtmlEntities(part));
+    }
+  }
+  return null;
+}
+
+async function imageUrlToFile(url) {
+  if (url.startsWith('data:image/')) {
+    const res = await fetch(url);
+    const blob = await res.blob();
+    return new File([blob], 'image.png', { type: blob.type || 'image/png' });
+  }
+  try {
+    const res = await fetch(url, { mode: 'cors', credentials: 'omit' });
+    if (!res.ok) return null;
+    const blob = await res.blob();
+    const ct = blob.type || '';
+    if (ct && !ct.startsWith('image/') && !IMAGE_EXT_RE.test(url.split('?')[0])) return null;
+    const name = (url.split('/').pop() || 'image').split('?')[0] || 'image.png';
+    return new File([blob], name, { type: ct || 'image/png' });
+  } catch {
+    /* fall through */
+  }
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      try {
+        const c = document.createElement('canvas');
+        c.width = img.naturalWidth;
+        c.height = img.naturalHeight;
+        c.getContext('2d').drawImage(img, 0, 0);
+        c.toBlob((blob) => {
+          if (!blob) {
+            resolve(null);
+            return;
+          }
+          resolve(new File([blob], 'image.png', { type: blob.type || 'image/png' }));
+        }, 'image/png');
+      } catch {
+        resolve(null);
+      }
+    };
+    img.onerror = () => resolve(null);
+    img.src = url;
+  });
+}
+
+/** File from OS, or image dragged from a webpage (URL / HTML payload). */
+async function imageFileFromDataTransfer(dt) {
+  const direct = firstImageLikeFileFromDataTransfer(dt);
+  if (direct) return direct;
+  const url = extractImageUrlFromDataTransfer(dt);
+  if (!url) return null;
+  return imageUrlToFile(url);
+}
+
 function regionFromPdfDataUrl(fullUrl, el) {
   return new Promise((resolve) => {
     const img = new Image();
@@ -104,24 +218,99 @@ function drawImageFit(ctx, src, x, y, w, h) {
   });
 }
 
+/** Display rect for overlay / hit-test (PDF images may have x,y overrides in imageEdits). */
+function getImageOverlayBounds(el, pn, imageEdits) {
+  if (el.type !== 'image') return { x: el.x, y: el.y, w: el.w, h: el.h };
+  if (el._userAdded) return { x: el.x, y: el.y, w: el.w, h: el.h };
+  const ed = imageEdits[pn]?.[el.id];
+  return { x: ed?.x ?? el.x, y: ed?.y ?? el.y, w: el.w, h: el.h };
+}
+
 /** Top-most image at page coordinates (added images checked first — drawn above PDF images). */
-function findImageAtPagePoint(pg, pn, addedMap, px, py) {
-  const inRect = (el) =>
-    el &&
-    px >= el.x &&
-    px <= el.x + el.w &&
-    py >= el.y &&
-    py <= el.y + el.h;
+function findImageAtPagePoint(pg, pn, addedMap, px, py, imageEdits) {
+  const inRect = (x, y, w, h) =>
+    px >= x && px <= x + w && py >= y && py <= y + h;
   const added = addedMap[pn] || [];
   for (let i = added.length - 1; i >= 0; i--) {
     const el = added[i];
-    if (el.type === 'image' && inRect(el)) return el;
+    if (el.type === 'image' && inRect(el.x, el.y, el.w, el.h)) return el;
   }
+  const iEd = imageEdits?.[pn];
   for (let i = pg.images.length - 1; i >= 0; i--) {
     const el = pg.images[i];
-    if (inRect(el)) return el;
+    const ox = iEd?.[el.id]?.x ?? el.x;
+    const oy = iEd?.[el.id]?.y ?? el.y;
+    if (inRect(ox, oy, el.w, el.h)) return el;
   }
   return null;
+}
+
+function findVideoAtPagePoint(pn, addedVideosMap, px, py) {
+  const list = addedVideosMap[pn] || [];
+  for (let i = list.length - 1; i >= 0; i--) {
+    const el = list[i];
+    if (px >= el.x && px <= el.x + el.w && py >= el.y && py <= el.y + el.h) return el;
+  }
+  return null;
+}
+
+/** After removing one page, shift numeric keys so page numbers stay 1…n. */
+function remapPageKeyedState(obj, deletedPageNum) {
+  const next = {};
+  Object.entries(obj || {}).forEach(([k, v]) => {
+    const pn = Number(k);
+    if (pn === deletedPageNum || Number.isNaN(pn)) return;
+    const nk = pn > deletedPageNum ? pn - 1 : pn;
+    next[nk] = v;
+  });
+  return next;
+}
+
+/** After inserting a blank page at 1-based position `insert1Based`, shift keys at or above that slot. */
+function remapPageKeyedStateInsert(obj, insert1Based) {
+  const next = {};
+  const keys = Object.keys(obj || {}).map(Number).filter(k => !Number.isNaN(k)).sort((a, b) => b - a);
+  keys.forEach((pn) => {
+    if (pn >= insert1Based) next[pn + 1] = obj[pn];
+    else next[pn] = obj[pn];
+  });
+  return next;
+}
+
+/** Blank page matching extract shape (same pixel size as reference page). */
+function createBlankPageData(width, height, bgColor = '#ffffff') {
+  const bg = bgColor && String(bgColor).startsWith('#') ? bgColor : '#ffffff';
+  const c = document.createElement('canvas');
+  c.width = Math.max(1, Math.round(width));
+  c.height = Math.max(1, Math.round(height));
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, c.width, c.height);
+  const fullUrl = c.toDataURL('image/jpeg', 0.92);
+  const tw = Math.max(64, Math.round(c.width * 0.16));
+  const th = Math.max(64, Math.round(c.height * 0.16));
+  const tc = document.createElement('canvas');
+  tc.width = tw;
+  tc.height = th;
+  const tctx = tc.getContext('2d');
+  tctx.fillStyle = bg;
+  tctx.fillRect(0, 0, tw, th);
+  const thumbUrl = tc.toDataURL('image/jpeg', 0.7);
+  return {
+    pageNum: 0,
+    width: c.width,
+    height: c.height,
+    fullUrl,
+    thumbUrl,
+    bgColor: bg,
+    textElements: [],
+    shapes: [],
+    images: [],
+    allElements: [],
+    docColors: [],
+    signature: '',
+    templateId: null,
+  };
 }
 
 // ─── PDF Extraction ───────────────────────────────────────────────────────────
@@ -260,22 +449,103 @@ function Row({ label, value, mono }) {
     </div>
   );
 }
-function ColorPill({ color }) {
-  const [copied, setCopied] = useState(false);
-  return (
-    <div onClick={() => { navigator.clipboard?.writeText(color).catch(() => { }); setCopied(true); setTimeout(() => setCopied(false), 1200); }} title={`Copy ${color}`} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, cursor: 'pointer' }}>
-      <div style={{ width: 28, height: 28, borderRadius: 7, background: color, border: '1px solid rgba(0,0,0,0.1)', transition: 'transform 0.1s' }}
-        onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.18)'}
-        onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
-      />
-      <span style={{ fontSize: 8, color: copied ? '#2AACB8' : '#64748b', fontFamily: 'monospace' }}>{copied ? '✓' : color.slice(1).toUpperCase()}</span>
-    </div>
-  );
-}
 function TypeBadge({ type }) {
-  const map = { text: '#2AACB8', shape: '#8B5CF6', image: '#F59E0B' };
+  const map = { text: '#2AACB8', shape: '#8B5CF6', image: '#F59E0B', video: '#6366F1' };
   return <span style={{ background: map[type] || '#555', color: '#fff', fontSize: 9, padding: '2px 7px', borderRadius: 4, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5 }}>{type}</span>;
 }
+
+function IconAddImage() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8.5" cy="8.5" r="1.5" fill="currentColor" stroke="none" /><path d="M21 15l-5-5L5 21" />
+    </svg>
+  );
+}
+function IconAddVideo() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <rect x="2" y="5" width="14" height="14" rx="2" /><path d="M18 9l4 3v6l-4-3V9z" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+function IconTrash() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6h14zM10 11v6M14 11v6" />
+    </svg>
+  );
+}
+function IconAddPage() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M4 3h11l5 5v13a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z" />
+      <path d="M12 11v6M9 14h6" />
+    </svg>
+  );
+}
+function IconUndo() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M3 7v6h6" />
+      <path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13" />
+    </svg>
+  );
+}
+function IconRedo() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M21 7v6h-6" />
+      <path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3L21 13" />
+    </svg>
+  );
+}
+
+/** Overlay mode toolbar (icons only). */
+function IconModeNone() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <circle cx="12" cy="12" r="10" /><path d="M4.93 4.93l14.14 14.14" />
+    </svg>
+  );
+}
+function IconModeText() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M4 7h16M4 12h12M4 17h16" />
+    </svg>
+  );
+}
+function IconModeShapes() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <rect x="3" y="11" width="8" height="8" rx="1" /><circle cx="16" cy="9" r="5" />
+    </svg>
+  );
+}
+function IconModeImages() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8.5" cy="8.5" r="1.5" fill="currentColor" stroke="none" /><path d="M21 15l-5-5L5 21" />
+    </svg>
+  );
+}
+function IconModeAll() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <rect x="2" y="3" width="16" height="11" rx="1" opacity="0.35" />
+      <rect x="4" y="7" width="16" height="11" rx="1" opacity="0.65" />
+      <rect x="6" y="11" width="16" height="11" rx="1" />
+    </svg>
+  );
+}
+
+const OVERLAY_MODE_ICONS = [
+  ['off', 'None', IconModeNone],
+  ['text', 'Text', IconModeText],
+  ['shapes', 'Shapes', IconModeShapes],
+  ['images', 'Images', IconModeImages],
+  ['all', 'All', IconModeAll],
+];
 
 function ImageCropModal({ sourceUrl, onApply, onCancel }) {
   const [natural, setNatural] = useState({ w: 0, h: 0 });
@@ -433,30 +703,37 @@ function App() {
   const [edits, setEdits] = useState({});    // { [pageNum]: { [elId]: newText } }
   const [imageEdits, setImageEdits] = useState({});    // { [pageNum]: { [imageId]: { removed?, src? } } }
   const [addedImages, setAddedImages] = useState({});  // { [pageNum]: [{ id, x,y,w,h, src, type:'image' }] }
+  const [addedVideos, setAddedVideos] = useState({});  // { [pageNum]: [{ id, x,y,w,h, src blob url, type:'video' }] }
   const [cropModal, setCropModal] = useState(null);  // { sourceUrl, resolve: (dataUrl) => void }
   const [templates, setTemplates] = useState([]);
   const [tokens, setTokens] = useState({ colors: [], fonts: [], sizes: [] });
   const [overlay, setOverlay] = useState('text');
   const [showOverlay, setShowOverlay] = useState(true);
-  const [zoom, setZoom] = useState(1);
+  const [zoom, setZoom] = useState(0.9);
   const canvasRef = useRef(null);
   const addImageInputRef = useRef(null);
+  const addVideoInputRef = useRef(null);
   const pageStageRef = useRef(null);
   const [viewerImageDropActive, setViewerImageDropActive] = useState(false);
+  const imageDragRef = useRef(null);
+  const suppressImageClickRef = useRef(false);
+  const [draggingImageId, setDraggingImageId] = useState(null);
 
-  // Undo / redo (snapshots of edits + imageEdits + addedImages)
+  // Undo / redo (snapshots of edits + imageEdits + addedImages + addedVideos)
   const historyStackRef = useRef([]);
   const redoStackRef = useRef([]);
   const isRestoringRef = useRef(false);
   const editsRef = useRef(edits);
   const imageEditsRef = useRef(imageEdits);
   const addedImagesRef = useRef(addedImages);
+  const addedVideosRef = useRef(addedVideos);
   const lastTextHistoryAtRef = useRef(0);
   const [historyUi, setHistoryUi] = useState(0);
 
   useEffect(() => { editsRef.current = edits; }, [edits]);
   useEffect(() => { imageEditsRef.current = imageEdits; }, [imageEdits]);
   useEffect(() => { addedImagesRef.current = addedImages; }, [addedImages]);
+  useEffect(() => { addedVideosRef.current = addedVideos; }, [addedVideos]);
 
   const captureBeforeChange = useCallback(() => {
     if (isRestoringRef.current) return;
@@ -464,6 +741,7 @@ function App() {
       edits: JSON.parse(JSON.stringify(editsRef.current)),
       imageEdits: JSON.parse(JSON.stringify(imageEditsRef.current)),
       addedImages: JSON.parse(JSON.stringify(addedImagesRef.current)),
+      addedVideos: JSON.parse(JSON.stringify(addedVideosRef.current)),
     };
     historyStackRef.current = [...historyStackRef.current.slice(-39), snap];
     redoStackRef.current = [];
@@ -477,12 +755,14 @@ function App() {
       edits: JSON.parse(JSON.stringify(editsRef.current)),
       imageEdits: JSON.parse(JSON.stringify(imageEditsRef.current)),
       addedImages: JSON.parse(JSON.stringify(addedImagesRef.current)),
+      addedVideos: JSON.parse(JSON.stringify(addedVideosRef.current)),
     };
     redoStackRef.current.push(current);
     const prev = historyStackRef.current.pop();
     setEdits(prev.edits);
     setImageEdits(prev.imageEdits);
     setAddedImages(prev.addedImages);
+    setAddedVideos(prev.addedVideos);
     setSelEl(null);
     setEditingId(null);
     setHistoryUi(u => u + 1);
@@ -496,12 +776,14 @@ function App() {
       edits: JSON.parse(JSON.stringify(editsRef.current)),
       imageEdits: JSON.parse(JSON.stringify(imageEditsRef.current)),
       addedImages: JSON.parse(JSON.stringify(addedImagesRef.current)),
+      addedVideos: JSON.parse(JSON.stringify(addedVideosRef.current)),
     };
     historyStackRef.current.push(current);
     const next = redoStackRef.current.pop();
     setEdits(next.edits);
     setImageEdits(next.imageEdits);
     setAddedImages(next.addedImages);
+    setAddedVideos(next.addedVideos);
     setSelEl(null);
     setEditingId(null);
     setHistoryUi(u => u + 1);
@@ -566,16 +848,66 @@ function App() {
   const totalEdits = Object.values(edits).reduce((s, pg) => s + Object.keys(pg).length, 0);
 
   const pageHasImageMods = pn =>
-    Object.keys(imageEdits[pn] || {}).length > 0 || (addedImages[pn] || []).length > 0;
+    Object.keys(imageEdits[pn] || {}).length > 0 || (addedImages[pn] || []).length > 0 || (addedVideos[pn] || []).length > 0;
   const totalImageMods =
     Object.values(imageEdits).reduce((s, o) => s + Object.keys(o).length, 0) +
-    Object.values(addedImages).reduce((s, arr) => s + arr.length, 0);
+    Object.values(addedImages).reduce((s, arr) => s + arr.length, 0) +
+    Object.values(addedVideos).reduce((s, arr) => s + arr.length, 0);
+
+  const deletePageAtIndex = useCallback((delIdx) => {
+    if (pages.length <= 1) {
+      alert('A PDF must keep at least one page.');
+      return;
+    }
+    const delPn = pages[delIdx]?.pageNum;
+    if (delPn === undefined) return;
+    if (!confirm(`Delete page ${delPn}? You can use Undo (⌘Z / Ctrl+Z) to restore.`)) return;
+    captureBeforeChange();
+    (addedVideos[delPn] || []).forEach(v => { if (v?.src?.startsWith('blob:')) URL.revokeObjectURL(v.src); });
+    const n = pages.length;
+    const newPages = pages.filter((_, i) => i !== delIdx).map((p, i) => ({ ...p, pageNum: i + 1 }));
+    setPages(newPages);
+    setTemplates(clusterTemplates(newPages));
+    setEdits(prev => remapPageKeyedState(prev, delPn));
+    setImageEdits(prev => remapPageKeyedState(prev, delPn));
+    setAddedImages(prev => remapPageKeyedState(prev, delPn));
+    setAddedVideos(prev => remapPageKeyedState(prev, delPn));
+    setSelEl(null);
+    setEditingId(null);
+    setSelPage(prev => {
+      if (delIdx < prev) return prev - 1;
+      if (delIdx === prev) return Math.min(delIdx, n - 2);
+      return prev;
+    });
+  }, [pages, addedVideos, captureBeforeChange]);
+
+  const addPageAfterCurrent = useCallback(() => {
+    if (!pages.length) return;
+    captureBeforeChange();
+    const refPg = pages[selPage] || pages[0];
+    const W = refPg.width;
+    const H = refPg.height;
+    const insertIdx = selPage + 1;
+    const insert1Based = insertIdx + 1;
+    const blank = createBlankPageData(W, H, refPg.bgColor);
+    const newPages = [...pages.slice(0, insertIdx), blank, ...pages.slice(insertIdx)].map((p, i) => ({ ...p, pageNum: i + 1 }));
+    setPages(newPages);
+    setTemplates(clusterTemplates(newPages));
+    setEdits(prev => remapPageKeyedStateInsert(prev, insert1Based));
+    setImageEdits(prev => remapPageKeyedStateInsert(prev, insert1Based));
+    setAddedImages(prev => remapPageKeyedStateInsert(prev, insert1Based));
+    setAddedVideos(prev => remapPageKeyedStateInsert(prev, insert1Based));
+    setSelEl(null);
+    setEditingId(null);
+    setSelPage(insertIdx);
+  }, [pages, selPage, captureBeforeChange]);
 
   // ── Upload ──
   const handleUpload = useCallback(async file => {
+    Object.values(addedVideosRef.current).flat().forEach(v => { if (v?.src?.startsWith('blob:')) URL.revokeObjectURL(v.src); });
     setLoading(true); setProgress(0); setDoneCount(0);
     setFileName(file.name); setPages([]); setSelPage(0); setSelEl(null); setEdits({}); setEditingId(null);
-    setImageEdits({}); setAddedImages({});
+    setImageEdits({}); setAddedImages({}); setAddedVideos({});
     historyStackRef.current = []; redoStackRef.current = []; setHistoryUi(u => u + 1);
     try {
       const buf = await file.arrayBuffer();
@@ -610,7 +942,7 @@ function App() {
   }, []);
 
   const addImageFromFile = useCallback(async (file, centerX, centerY) => {
-    if (!file?.type?.startsWith('image/')) return;
+    if (!isLikelyImageFile(file)) return;
     const pg = pages[selPage];
     if (!pg) return;
     captureBeforeChange();
@@ -638,8 +970,64 @@ function App() {
 
   const handleAddImageFile = useCallback((file) => addImageFromFile(file), [addImageFromFile]);
 
+  const addVideoFromFile = useCallback(async (file, centerX, centerY) => {
+    if (!isLikelyVideoFile(file)) return;
+    const pg = pages[selPage];
+    if (!pg) return;
+    captureBeforeChange();
+    const src = URL.createObjectURL(file);
+    const pn = pg.pageNum;
+    const id = `vid_${pn}_${Date.now()}`;
+    const w = Math.min(320, pg.width * 0.5);
+    const h = Math.min(220, pg.height * 0.36);
+    let x;
+    let y;
+    if (typeof centerX === 'number' && typeof centerY === 'number' && !Number.isNaN(centerX) && !Number.isNaN(centerY)) {
+      x = Math.min(Math.max(centerX - w / 2, 0), Math.max(0, pg.width - w));
+      y = Math.min(Math.max(centerY - h / 2, 0), Math.max(0, pg.height - h));
+    } else {
+      x = Math.max(8, (pg.width - w) / 2);
+      y = Math.max(8, (pg.height - h) / 2);
+    }
+    setAddedVideos(prev => ({
+      ...prev,
+      [pn]: [...(prev[pn] || []), { id, type: 'video', x, y, w, h, src, _userAdded: true }],
+    }));
+    setShowOverlay(true);
+    setOverlay('images');
+  }, [pages, selPage, captureBeforeChange]);
+
+  const handleAddVideoFile = useCallback((file) => addVideoFromFile(file), [addVideoFromFile]);
+
+  const handleReplaceVideo = useCallback((el, file) => {
+    if (!isLikelyVideoFile(file)) return;
+    captureBeforeChange();
+    const pg = pages[selPage];
+    if (!pg) return;
+    const pn = pg.pageNum;
+    const next = URL.createObjectURL(file);
+    if (el.src?.startsWith('blob:')) URL.revokeObjectURL(el.src);
+    setAddedVideos(prev => ({
+      ...prev,
+      [pn]: (prev[pn] || []).map(a => (a.id === el.id ? { ...a, src: next } : a)),
+    }));
+  }, [pages, selPage, captureBeforeChange]);
+
+  const handleRemoveVideo = useCallback((el) => {
+    const pg = pages[selPage];
+    if (!pg) return;
+    captureBeforeChange();
+    const pn = pg.pageNum;
+    if (el.src?.startsWith('blob:')) URL.revokeObjectURL(el.src);
+    setAddedVideos(prev => ({
+      ...prev,
+      [pn]: (prev[pn] || []).filter(a => a.id !== el.id),
+    }));
+    setSelEl(null);
+  }, [pages, selPage, captureBeforeChange]);
+
   const handleReplaceImage = useCallback(async (el, file) => {
-    if (!file?.type?.startsWith('image/')) return;
+    if (!isLikelyImageFile(file)) return;
     captureBeforeChange();
     const src = await readFileAsDataURL(file);
     const pg = pages[selPage];
@@ -656,18 +1044,17 @@ function App() {
   }, [pages, selPage, patchImageEdit, captureBeforeChange]);
 
   const handleViewerDragOver = useCallback((e) => {
-    const types = e.dataTransfer?.types ? Array.from(e.dataTransfer.types) : [];
-    if (!types.includes('Files')) return;
+    if (!pages.length) return;
+    // Must always preventDefault while a PDF is open or the browser never fires drop (Safari often omits "Files" in types during dragover).
     e.preventDefault();
     e.dataTransfer.dropEffect = 'copy';
-  }, []);
+  }, [pages.length]);
 
   const handleViewerDragEnter = useCallback((e) => {
-    const types = e.dataTransfer?.types ? Array.from(e.dataTransfer.types) : [];
-    if (!types.includes('Files')) return;
+    if (!pages.length) return;
     e.preventDefault();
     setViewerImageDropActive(true);
-  }, []);
+  }, [pages.length]);
 
   const handleViewerDragLeave = useCallback((e) => {
     if (!e.currentTarget.contains(e.relatedTarget)) setViewerImageDropActive(false);
@@ -677,7 +1064,8 @@ function App() {
     e.preventDefault();
     e.stopPropagation();
     setViewerImageDropActive(false);
-    const file = Array.from(e.dataTransfer.files || []).find(f => f.type.startsWith('image/'));
+    let file = await imageFileFromDataTransfer(e.dataTransfer);
+    if (!file) file = Array.from(e.dataTransfer.files || []).find(isLikelyVideoFile) || null;
     if (!file) return;
     const inner = pageStageRef.current;
     const pgLocal = pages[selPage];
@@ -685,13 +1073,164 @@ function App() {
     const r = inner.getBoundingClientRect();
     const x = (e.clientX - r.left) / zoom;
     const y = (e.clientY - r.top) / zoom;
-    const hit = findImageAtPagePoint(pgLocal, pgLocal.pageNum, addedImages, x, y);
+    if (isLikelyVideoFile(file)) {
+      const vhit = findVideoAtPagePoint(pgLocal.pageNum, addedVideos, x, y);
+      if (vhit) handleReplaceVideo(vhit, file);
+      else await addVideoFromFile(file, x, y);
+      return;
+    }
+    if (!isLikelyImageFile(file)) return;
+    const hit = findImageAtPagePoint(pgLocal, pgLocal.pageNum, addedImages, x, y, imageEdits);
     if (hit) {
       await handleReplaceImage(hit, file);
     } else {
       await addImageFromFile(file, x, y);
     }
-  }, [pages, selPage, zoom, addedImages, handleReplaceImage, addImageFromFile]);
+  }, [pages, selPage, zoom, addedImages, addedVideos, imageEdits, handleReplaceImage, handleReplaceVideo, addImageFromFile, addVideoFromFile]);
+
+  const clientToPageCoords = useCallback((clientX, clientY) => {
+    const inner = pageStageRef.current;
+    if (!inner) return { x: 0, y: 0 };
+    const r = inner.getBoundingClientRect();
+    return { x: (clientX - r.left) / zoom, y: (clientY - r.top) / zoom };
+  }, [zoom]);
+
+  const onImagePointerDown = useCallback((e, el) => {
+    if (e.button !== 0) return;
+    if (el.type === 'video') {
+      e.stopPropagation();
+      const pg = pages[selPage];
+      if (!pg) return;
+      const pn = pg.pageNum;
+      const ob = { x: el.x, y: el.y, w: el.w, h: el.h };
+      const { x: px, y: py } = clientToPageCoords(e.clientX, e.clientY);
+      imageDragRef.current = {
+        pointerId: e.pointerId,
+        elId: el.id,
+        pn,
+        mediaKind: 'video',
+        grabDx: px - ob.x,
+        grabDy: py - ob.y,
+        pw: pg.width,
+        ph: pg.height,
+        elW: el.w,
+        elH: el.h,
+        startPx: px,
+        startPy: py,
+        latestNX: ob.x,
+        latestNY: ob.y,
+        moved: false,
+        captured: false,
+      };
+      setDraggingImageId(el.id);
+      e.currentTarget.setPointerCapture(e.pointerId);
+      return;
+    }
+    if (el.type !== 'image') return;
+    const pg = pages[selPage];
+    if (!pg) return;
+    const pn = pg.pageNum;
+    const ed = imageEditsRef.current?.[pn]?.[el.id];
+    if (ed?.removed) return;
+    e.stopPropagation();
+    const ob = getImageOverlayBounds(el, pn, imageEditsRef.current);
+    const { x: px, y: py } = clientToPageCoords(e.clientX, e.clientY);
+    imageDragRef.current = {
+      pointerId: e.pointerId,
+      elId: el.id,
+      pn,
+      userAdded: !!el._userAdded,
+      grabDx: px - ob.x,
+      grabDy: py - ob.y,
+      pw: pg.width,
+      ph: pg.height,
+      elW: el.w,
+      elH: el.h,
+      startPx: px,
+      startPy: py,
+      latestNX: ob.x,
+      latestNY: ob.y,
+      moved: false,
+      captured: false,
+      extracting: false,
+      extractDone: false,
+      fullUrl: pg.fullUrl,
+      pdfImageEl: el._userAdded ? null : el,
+    };
+    setDraggingImageId(el.id);
+    e.currentTarget.setPointerCapture(e.pointerId);
+  }, [pages, selPage, clientToPageCoords]);
+
+  const onImagePointerMove = useCallback((e) => {
+    const d = imageDragRef.current;
+    if (!d || e.pointerId !== d.pointerId) return;
+    const { x: px, y: py } = clientToPageCoords(e.clientX, e.clientY);
+    if (!d.moved && Math.hypot(px - d.startPx, py - d.startPy) < 4) return;
+    if (!d.moved) {
+      d.moved = true;
+      if (!d.captured) {
+        captureBeforeChange();
+        d.captured = true;
+      }
+    }
+    let nx = px - d.grabDx;
+    let ny = py - d.grabDy;
+    nx = Math.min(Math.max(0, nx), Math.max(0, d.pw - d.elW));
+    ny = Math.min(Math.max(0, ny), Math.max(0, d.ph - d.elH));
+    d.latestNX = nx;
+    d.latestNY = ny;
+
+    if (d.mediaKind === 'video') {
+      setAddedVideos(prev => ({
+        ...prev,
+        [d.pn]: (prev[d.pn] || []).map(a => (a.id === d.elId ? { ...a, x: nx, y: ny } : a)),
+      }));
+      setSelEl(prev => (prev && prev.id === d.elId && prev.type === 'video' ? { ...prev, x: nx, y: ny } : prev));
+      return;
+    }
+
+    if (d.userAdded) {
+      setAddedImages(prev => ({
+        ...prev,
+        [d.pn]: (prev[d.pn] || []).map(a => (a.id === d.elId ? { ...a, x: nx, y: ny } : a)),
+      }));
+      setSelEl(prev => (prev && prev.id === d.elId && prev.type === 'image' ? { ...prev, x: nx, y: ny } : prev));
+      return;
+    }
+
+    const hasSrc = !!(imageEditsRef.current?.[d.pn]?.[d.elId]?.src);
+    if (!d.userAdded && (hasSrc || d.extractDone)) {
+      patchImageEdit(d.pn, d.elId, { x: nx, y: ny });
+      return;
+    }
+
+    if (d.extracting) return;
+    if (!d.pdfImageEl) return;
+    d.extracting = true;
+    const { pn, elId, fullUrl, pdfImageEl } = d;
+    void regionFromPdfDataUrl(fullUrl, pdfImageEl).then((dataUrl) => {
+      d.extracting = false;
+      if (!dataUrl) return;
+      d.extractDone = true;
+      const ref = imageDragRef.current;
+      const nx2 = ref?.elId === elId ? (ref.latestNX ?? nx) : nx;
+      const ny2 = ref?.elId === elId ? (ref.latestNY ?? ny) : ny;
+      patchImageEdit(pn, elId, { src: dataUrl, removed: false, x: nx2, y: ny2 });
+    });
+  }, [clientToPageCoords, captureBeforeChange, patchImageEdit]);
+
+  const onImagePointerUp = useCallback((e) => {
+    const d = imageDragRef.current;
+    if (!d || e.pointerId !== d.pointerId) return;
+    if (d.moved) suppressImageClickRef.current = true;
+    imageDragRef.current = null;
+    setDraggingImageId(null);
+    try {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    } catch {
+      /* already released */
+    }
+  }, []);
 
   const handleRemoveImage = useCallback((el) => {
     const pg = pages[selPage];
@@ -767,10 +1306,15 @@ function App() {
       }
       for (const el of pg.images) {
         const ed = iEd[el.id];
-        if (ed?.src && !ed?.removed) {
-          await drawImageFit(ctx, ed.src, el.x, el.y, el.w, el.h);
-          if (cancelled) return;
+        if (!ed?.src || ed?.removed) continue;
+        const ox = ed?.x ?? el.x;
+        const oy = ed?.y ?? el.y;
+        if (ox !== el.x || oy !== el.y) {
+          ctx.fillStyle = bg;
+          ctx.fillRect(el.x, el.y, el.w, el.h);
         }
+        await drawImageFit(ctx, ed.src, ox, oy, el.w, el.h);
+        if (cancelled) return;
       }
       for (const el of addedImages[pn] || []) {
         await drawImageFit(ctx, el.src, el.x, el.y, el.w, el.h);
@@ -785,7 +1329,6 @@ function App() {
   if (!pages.length) return <UploadZone onUpload={handleUpload} />;
 
   const pg = pages[selPage];
-  const tmpl = templates.find(t => t.id === pg?.templateId);
   const pageEdits = edits[pg?.pageNum] || {};
 
   // Which elements to show in overlay (includes user-placed images)
@@ -794,6 +1337,7 @@ function App() {
     ...(overlay === 'shapes' || overlay === 'all' ? pg.shapes : []),
     ...(overlay === 'images' || overlay === 'all' ? pg.images : []),
     ...(overlay === 'images' || overlay === 'all' ? (addedImages[pg.pageNum] || []) : []),
+    ...(overlay === 'images' || overlay === 'all' ? (addedVideos[pg.pageNum] || []) : []),
   ] : [];
 
   // Text elements that have been edited on this page
@@ -803,46 +1347,54 @@ function App() {
     <div style={{ display: 'flex', height: '100vh', overflow: 'hidden', background: '#f4f6fa' }}>
 
       {/* ══ LEFT SIDEBAR ══ */}
-      <div style={{ width: 188, minWidth: 188, background: '#ffffff', borderRight: '1px solid #e8ecf0', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-        <div style={{ padding: '13px 12px 11px', borderBottom: '1px solid #e8ecf0' }}>
-          <div style={{ fontSize: 9, color: '#2AACB8', fontWeight: 700, letterSpacing: 1.3, textTransform: 'uppercase', marginBottom: 4 }}>Design Extractor</div>
-          <div style={{ fontSize: 11, color: '#666', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={fileName}>{fileName}</div>
-          <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
-            <span style={{ fontSize: 10, color: '#64748b' }}>{pages.length} pages</span>
-            <span style={{ fontSize: 10, color: '#64748b' }}>·</span>
-            <span style={{ fontSize: 10, color: '#64748b' }}>{templates.length} layouts</span>
+      <div style={{ width: 228, minWidth: 228, background: '#ffffff', borderRight: '1px solid #e8ecf0', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        <div style={{ padding: '20px 14px 16px', borderBottom: '1px solid #e8ecf0' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginTop: 4 }}>
+            <span style={{ fontSize: 14, fontWeight: 700, color: '#0f172a', fontVariantNumeric: 'tabular-nums' }}>Page {pg?.pageNum}/{pages.length}</span>
             {(totalEdits + totalImageMods) > 0 && (
-              <span style={{ fontSize: 10, color: '#F59E0B' }}>
-                · {totalEdits > 0 && `${totalEdits} text`}
+              <span style={{ fontSize: 10, color: '#d97706', fontWeight: 600 }}>
+                {totalEdits > 0 && `${totalEdits} text`}
                 {totalEdits > 0 && totalImageMods > 0 && ' · '}
-                {totalImageMods > 0 && `${totalImageMods} image${totalImageMods > 1 ? 's' : ''}`}
+                {totalImageMods > 0 && `${totalImageMods} media`}
               </span>
             )}
           </div>
         </div>
-
-        {templates.length > 0 && (
-          <div style={{ padding: '9px 10px 7px', borderBottom: '1px solid #e8ecf0', flexShrink: 0 }}>
-            <div style={{ fontSize: 9, color: '#64748b', letterSpacing: 1.5, textTransform: 'uppercase', fontWeight: 700, marginBottom: 7 }}>Layouts</div>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
-              {templates.map(t => (
-                <div key={t.id} onClick={() => { const f = pages.find(p => p.templateId === t.id); if (f) { setSelPage(pages.indexOf(f)); setSelEl(null); setEditingId(null); } }}
-                  style={{ padding: '3px 9px', borderRadius: 12, fontSize: 10, cursor: 'pointer', background: tmpl?.id === t.id ? 'rgba(42,172,184,0.2)' : '#e8ecf0', color: tmpl?.id === t.id ? '#2AACB8' : '#666', border: `1px solid ${tmpl?.id === t.id ? 'rgba(42,172,184,0.4)' : '#d1d9e0'}`, transition: 'all 0.15s' }}>
-                  {t.id} <span style={{ opacity: 0.6 }}>·{t.pageNums.length}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
 
         <div style={{ flex: 1, overflowY: 'auto', padding: '8px 8px 16px' }}>
           <div style={{ fontSize: 9, color: '#64748b', letterSpacing: 1.5, textTransform: 'uppercase', fontWeight: 700, padding: '5px 2px 7px' }}>Pages</div>
           {pages.map((p, idx) => (
             <div key={idx} onClick={() => { setSelPage(idx); setSelEl(null); setEditingId(null); }}
               style={{ marginBottom: 8, cursor: 'pointer', borderRadius: 6, overflow: 'hidden', border: `2px solid ${idx === selPage ? '#2AACB8' : 'transparent'}`, position: 'relative', transition: 'border-color 0.15s' }}>
+              <button
+                type="button"
+                title={pages.length <= 1 ? 'Cannot delete the only page' : `Delete page ${p.pageNum}`}
+                aria-label={`Delete page ${p.pageNum}`}
+                onClick={(e) => { e.stopPropagation(); deletePageAtIndex(idx); }}
+                disabled={pages.length <= 1}
+                style={{
+                  position: 'absolute',
+                  top: 4,
+                  left: 4,
+                  zIndex: 2,
+                  width: 28,
+                  height: 28,
+                  padding: 0,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  borderRadius: 6,
+                  border: '1px solid rgba(0,0,0,0.1)',
+                  background: 'rgba(255,255,255,0.95)',
+                  color: pages.length <= 1 ? '#cbd5e1' : '#b91c1c',
+                  cursor: pages.length <= 1 ? 'not-allowed' : 'pointer',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
+                }}
+              >
+                <IconTrash />
+              </button>
               <img src={p.thumbUrl} style={{ width: '100%', display: 'block' }} alt={`p${p.pageNum}`} />
               <div style={{ position: 'absolute', bottom: 4, right: 4, background: 'rgba(0,0,0,0.75)', color: '#fff', fontSize: 9, padding: '1px 5px', borderRadius: 3, fontWeight: 600 }}>{p.pageNum}</div>
-              {p.templateId && <div style={{ position: 'absolute', top: 4, left: 4, background: 'rgba(42,172,184,0.88)', color: '#fff', fontSize: 8, padding: '1px 5px', borderRadius: 3, fontWeight: 700 }}>{p.templateId}</div>}
               {(pageHasEdits(p.pageNum) || pageHasImageMods(p.pageNum)) && <div style={{ position: 'absolute', top: 4, right: 4, background: '#F59E0B', width: 8, height: 8, borderRadius: '50%' }} />}
             </div>
           ))}
@@ -853,65 +1405,28 @@ function App() {
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
 
         {/* Toolbar */}
-        <div style={{ height: 46, background: '#ffffff', borderBottom: '1px solid #e8ecf0', display: 'flex', alignItems: 'center', padding: '0 12px', gap: 7, flexShrink: 0 }}>
+        <div style={{ minHeight: 64, background: '#ffffff', borderBottom: '1px solid #e8ecf0', display: 'flex', alignItems: 'center', padding: '12px 16px', gap: 8, flexShrink: 0, flexWrap: 'wrap', rowGap: 8 }}>
           <span style={{ fontSize: 11, color: '#555' }}>Page {pg?.pageNum}/{pages.length}</span>
-          {tmpl && <span style={{ fontSize: 10, background: 'rgba(42,172,184,0.12)', color: '#2AACB8', padding: '2px 7px', borderRadius: 10, border: '1px solid rgba(42,172,184,0.25)' }}>Layout {tmpl.id}</span>}
           {(totalEdits + totalImageMods) > 0 && (
             <span style={{ fontSize: 10, background: 'rgba(245,158,11,0.15)', color: '#F59E0B', padding: '2px 7px', borderRadius: 10, border: '1px solid rgba(245,158,11,0.3)' }}>
               {totalEdits > 0 && `${totalEdits} text`}
               {totalEdits > 0 && totalImageMods > 0 && ' · '}
-              {totalImageMods > 0 && `${totalImageMods} img`}
+              {totalImageMods > 0 && `${totalImageMods} media`}
             </span>
           )}
 
           <div style={{ flex: 1 }} />
 
-          {/* Hint */}
-          <span style={{ fontSize: 10, color: '#64748b', fontStyle: 'italic' }}>Text: double-click · Images: drag files onto page (replace on image) or Add image</span>
-          <div style={{ width: 1, height: 18, background: '#d1d9e0' }} />
+          <div style={{ width: 1, height: 26, background: '#d1d9e0' }} />
+          <button type="button" title="Undo (⌘Z / Ctrl+Z)" aria-label="Undo" onClick={undo} disabled={!canUndo} style={{ width: 36, height: 36, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: canUndo ? '#e8ecf0' : '#f1f5f9', color: canUndo ? '#334155' : '#94a3b8', border: '1px solid #d1d9e0', borderRadius: 8, cursor: canUndo ? 'pointer' : 'not-allowed' }}><IconUndo /></button>
+          <button type="button" title="Redo (⌘⇧Z / Ctrl+Y)" aria-label="Redo" onClick={redo} disabled={!canRedo} style={{ width: 36, height: 36, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: canRedo ? '#e8ecf0' : '#f1f5f9', color: canRedo ? '#334155' : '#94a3b8', border: '1px solid #d1d9e0', borderRadius: 8, cursor: canRedo ? 'pointer' : 'not-allowed' }}><IconRedo /></button>
 
-          {/* Overlay */}
-          <span style={{ fontSize: 10, color: '#64748b' }}>Show</span>
-          {[['off', 'None'], ['text', 'Text'], ['shapes', 'Shapes'], ['images', 'Images'], ['all', 'All']].map(([v, l]) => (
-            <button key={v} onClick={() => { if (v === 'off') { setShowOverlay(false); } else { setShowOverlay(true); setOverlay(v); } }} style={{ padding: '3px 8px', borderRadius: 4, fontSize: 10, cursor: 'pointer', border: 'none', background: (v === 'off' ? !showOverlay : (showOverlay && overlay === v)) ? '#2AACB8' : '#e8ecf0', color: (v === 'off' ? !showOverlay : (showOverlay && overlay === v)) ? '#fff' : '#555', transition: 'all 0.15s' }}>{l}</button>
-          ))}
-
-          <div style={{ width: 1, height: 18, background: '#d1d9e0' }} />
-          {[0.5, 0.75, 1, 1.25].map(z => (
-            <button key={z} onClick={() => setZoom(z)} style={{ padding: '3px 7px', borderRadius: 4, fontSize: 10, cursor: 'pointer', border: 'none', background: zoom === z ? '#d6eef0' : 'transparent', color: zoom === z ? '#0f766e' : '#64748b' }}>{z === 1 ? '100%' : z * 100 + '%'}</button>
-          ))}
-
-          <div style={{ width: 1, height: 18, background: '#d1d9e0' }} />
-          <button type="button" title="Undo (⌘Z / Ctrl+Z)" onClick={undo} disabled={!canUndo} style={{ padding: '5px 10px', background: canUndo ? '#e8ecf0' : '#f1f5f9', color: canUndo ? '#334155' : '#94a3b8', border: '1px solid #d1d9e0', borderRadius: 5, fontSize: 11, cursor: canUndo ? 'pointer' : 'not-allowed' }}>Undo</button>
-          <button type="button" title="Redo (⌘⇧Z / Ctrl+Y)" onClick={redo} disabled={!canRedo} style={{ padding: '5px 10px', background: canRedo ? '#e8ecf0' : '#f1f5f9', color: canRedo ? '#334155' : '#94a3b8', border: '1px solid #d1d9e0', borderRadius: 5, fontSize: 11, cursor: canRedo ? 'pointer' : 'not-allowed' }}>Redo</button>
-
-          <div style={{ width: 1, height: 18, background: '#d1d9e0' }} />
-          <input ref={addImageInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={e => { const f = e.target.files?.[0]; if (f) handleAddImageFile(f); e.target.value = ''; }} />
-          <button type="button" onClick={() => addImageInputRef.current?.click()} style={{ padding: '5px 10px', background: '#e8ecf0', color: '#475569', border: '1px solid #d1d9e0', borderRadius: 5, fontSize: 11, cursor: 'pointer' }}>Add image</button>
+          <div style={{ width: 1, height: 26, background: '#d1d9e0' }} />
           <button type="button" onClick={() => {
-            const blob = new Blob([JSON.stringify({
-              fileName,
-              pages: pages.map(p => ({
-                pageNum: p.pageNum,
-                bgColor: p.bgColor,
-                templateId: p.templateId,
-                textElements: p.textElements,
-                shapes: p.shapes,
-                images: p.images,
-                docColors: p.docColors,
-                edits: edits[p.pageNum] || {},
-                imageEdits: imageEdits[p.pageNum] || {},
-                addedImages: addedImages[p.pageNum] || [],
-              })),
-              templates,
-              designTokens: tokens,
-              allEdits: edits,
-              imageEdits,
-              addedImages,
-            }, null, 2)], { type: 'application/json' });
-            const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = fileName.replace(/\.pdf$/i, '') + '-design.json'; a.click();
-          }} style={{ padding: '5px 12px', background: '#2AACB8', color: '#fff', border: 'none', borderRadius: 5, fontSize: 11, cursor: 'pointer', fontWeight: 600 }}>Export JSON</button>
-          <button type="button" onClick={() => { setPages([]); setTemplates([]); setTokens({ colors: [], fonts: [], sizes: [] }); setEdits({}); setImageEdits({}); setAddedImages({}); historyStackRef.current = []; redoStackRef.current = []; setHistoryUi(u => u + 1); }} style={{ padding: '5px 9px', background: '#e8ecf0', color: '#666', border: '1px solid #d1d9e0', borderRadius: 5, fontSize: 11, cursor: 'pointer' }}>New</button>
+            Object.values(addedVideosRef.current).flat().forEach(v => { if (v?.src?.startsWith('blob:')) URL.revokeObjectURL(v.src); });
+            setPages([]); setTemplates([]); setTokens({ colors: [], fonts: [], sizes: [] }); setEdits({}); setImageEdits({}); setAddedImages({}); setAddedVideos({});
+            historyStackRef.current = []; redoStackRef.current = []; setHistoryUi(u => u + 1);
+          }} style={{ padding: '5px 9px', background: '#e8ecf0', color: '#666', border: '1px solid #d1d9e0', borderRadius: 5, fontSize: 11, cursor: 'pointer' }}>New</button>
         </div>
 
         {/* Page canvas + overlays */}
@@ -931,6 +1446,28 @@ function App() {
         >
           <div ref={pageStageRef} style={{ position: 'relative', display: 'inline-block', boxShadow: '0 12px 40px rgba(15,23,42,0.1)', transform: `scale(${zoom})`, transformOrigin: 'top center' }}>
             <canvas ref={canvasRef} style={{ display: 'block' }} />
+
+            {/* Placed videos (HTML layer above PDF bitmap) */}
+            {(addedVideos[pg.pageNum] || []).map(v => (
+              <video
+                key={v.id}
+                src={v.src}
+                muted
+                playsInline
+                loop
+                autoPlay
+                style={{
+                  position: 'absolute',
+                  left: v.x,
+                  top: v.y,
+                  width: v.w,
+                  height: v.h,
+                  objectFit: 'cover',
+                  pointerEvents: 'none',
+                  borderRadius: 2,
+                }}
+              />
+            ))}
 
             {/* ── Edited text overlays (cover original, always shown) ── */}
             {editedTexts.map(el => {
@@ -972,24 +1509,43 @@ function App() {
             {showOverlay && pg && (
               <div style={{ position: 'absolute', top: 0, left: 0, width: pg.width, height: pg.height, pointerEvents: 'none' }}>
                 {overlayEls.map((el, idx) => {
-                  const bord = el.type === 'text' ? '#2AACB8' : el.type === 'image' ? '#F59E0B' : '#8B5CF6';
-                  const bg = el.type === 'text' ? 'rgba(42,172,184,0.1)' : el.type === 'image' ? 'rgba(245,158,11,0.1)' : 'rgba(139,92,246,0.1)';
+                  const bord = el.type === 'text' ? '#2AACB8' : el.type === 'image' ? '#F59E0B' : el.type === 'video' ? '#6366F1' : '#8B5CF6';
+                  const bg = el.type === 'text' ? 'rgba(42,172,184,0.1)' : el.type === 'image' ? 'rgba(245,158,11,0.1)' : el.type === 'video' ? 'rgba(99,102,241,0.12)' : 'rgba(139,92,246,0.1)';
                   const active = selEl?.id === el.id;
                   const hasEdit = el.type === 'text' && pageEdits[el.id] !== undefined;
                   const pn = pg.pageNum;
                   const imgEdited = el.type === 'image' && !el._userAdded && (imageEdits[pn]?.[el.id]?.src || imageEdits[pn]?.[el.id]?.removed);
                   const imgUser = el.type === 'image' && el._userAdded;
+                  const vidUser = el.type === 'video';
+                  const ob = getImageOverlayBounds(el, pn, imageEdits);
+                  const imgRemoved = el.type === 'image' && imageEdits[pn]?.[el.id]?.removed;
+                  const placementDrag = el.type === 'image' || el.type === 'video';
+                  const imgCursor = !placementDrag ? (el.type === 'text' ? 'text' : 'pointer')
+                    : el.type === 'image' && imgRemoved ? 'pointer' : (draggingImageId === el.id ? 'grabbing' : 'grab');
                   return (
                     <div key={el.id || idx}
-                      onClick={e => { e.stopPropagation(); if (editingId) return; setSelEl(active ? null : el); }}
+                      onClick={e => {
+                        e.stopPropagation();
+                        if (editingId) return;
+                        if (placementDrag && suppressImageClickRef.current) {
+                          suppressImageClickRef.current = false;
+                          return;
+                        }
+                        setSelEl(active ? null : el);
+                      }}
                       onDoubleClick={e => { e.stopPropagation(); if (el.type === 'text') { setSelEl(el); setEditingId(el.id); } }}
+                      onPointerDown={placementDrag ? e => onImagePointerDown(e, el) : undefined}
+                      onPointerMove={placementDrag ? onImagePointerMove : undefined}
+                      onPointerUp={placementDrag ? onImagePointerUp : undefined}
+                      onPointerCancel={placementDrag ? onImagePointerUp : undefined}
                       style={{
-                        position: 'absolute', pointerEvents: 'auto', cursor: el.type === 'text' ? 'text' : 'pointer',
-                        left: el.x, top: el.y, width: Math.max(el.w, 2), height: Math.max(el.h, 2),
+                        position: 'absolute', pointerEvents: 'auto', cursor: imgCursor,
+                        touchAction: placementDrag ? 'none' : undefined,
+                        left: ob.x, top: ob.y, width: Math.max(ob.w, 2), height: Math.max(ob.h, 2),
                         border: `1px solid ${active ? bord : bord + '66'}`,
                         background: active ? bg : 'transparent',
                         boxSizing: 'border-box',
-                        outline: hasEdit || imgEdited || imgUser ? '1.5px solid #F59E0B' : 'none',
+                        outline: hasEdit || imgEdited || imgUser ? '1.5px solid #F59E0B' : vidUser ? '1.5px solid #6366F1' : 'none',
                         outlineOffset: 1,
                       }}
                       onMouseEnter={e => { if (!active && !editingId) e.currentTarget.style.background = bg; }}
@@ -1004,7 +1560,131 @@ function App() {
       </div>
 
       {/* ══ RIGHT INSPECTOR ══ */}
-      <div style={{ width: 270, minWidth: 270, background: '#ffffff', borderLeft: '1px solid #e8ecf0', overflow: 'auto', padding: '14px 13px 24px' }}>
+      <div style={{ width: 312, minWidth: 312, background: '#ffffff', borderLeft: '1px solid #e8ecf0', overflow: 'auto', padding: '20px 16px 28px' }}>
+        <input ref={addImageInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={e => { const f = e.target.files?.[0]; if (f) handleAddImageFile(f); e.target.value = ''; }} />
+        <input ref={addVideoInputRef} type="file" accept="video/*" style={{ display: 'none' }} onChange={e => { const f = e.target.files?.[0]; if (f) handleAddVideoFile(f); e.target.value = ''; }} />
+        <div style={{ marginBottom: 16, paddingBottom: 16, borderBottom: '1px solid #e8ecf0' }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: '#64748b', letterSpacing: '0.07em', textTransform: 'uppercase', marginBottom: 8 }}>Page zoom</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <input
+              type="range"
+              min={25}
+              max={150}
+              step={1}
+              value={Math.round(zoom * 100)}
+              onChange={e => setZoom(Number(e.target.value) / 100)}
+              aria-label="Page zoom"
+              style={{ flex: 1, height: 6, accentColor: '#2AACB8', cursor: 'pointer', minWidth: 0 }}
+            />
+            <span style={{ fontSize: 12, fontWeight: 700, color: '#334155', fontVariantNumeric: 'tabular-nums', minWidth: 40, textAlign: 'right' }}>{Math.round(zoom * 100)}%</span>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6, fontSize: 10, fontWeight: 600, color: '#94a3b8' }}>
+            <span>25%</span>
+            <span>150%</span>
+          </div>
+        </div>
+
+        <div style={{ marginBottom: 16, paddingBottom: 16, borderBottom: '1px solid #e8ecf0' }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: '#64748b', letterSpacing: '0.07em', textTransform: 'uppercase', marginBottom: 10 }}>Mode</div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
+            {OVERLAY_MODE_ICONS.map(([v, label, IconComp]) => {
+              const active = v === 'off' ? !showOverlay : (showOverlay && overlay === v);
+              return (
+                <button
+                  key={v}
+                  type="button"
+                  title={label}
+                  aria-label={label}
+                  aria-pressed={active}
+                  onClick={() => { if (v === 'off') { setShowOverlay(false); } else { setShowOverlay(true); setOverlay(v); } }}
+                  style={{
+                    width: 40,
+                    height: 40,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    borderRadius: 8,
+                    border: `1px solid ${active ? '#2AACB8' : '#d1d9e0'}`,
+                    background: active ? '#2AACB8' : '#f8fafc',
+                    color: active ? '#fff' : '#475569',
+                    cursor: 'pointer',
+                    transition: 'background 0.15s, border-color 0.15s, color 0.15s',
+                  }}
+                >
+                  <IconComp />
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div style={{ marginBottom: 16, paddingBottom: 16, borderBottom: '1px solid #e8ecf0' }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: '#64748b', letterSpacing: '0.07em', textTransform: 'uppercase', marginBottom: 10 }}>Add to page</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <button type="button" title="Add image" aria-label="Add image" onClick={() => addImageInputRef.current?.click()}
+              style={{ width: 44, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 10, border: '1px solid #d1d9e0', background: '#f8fafc', color: '#334155', cursor: 'pointer' }}>
+              <IconAddImage />
+            </button>
+            <button type="button" title="Add video" aria-label="Add video" onClick={() => addVideoInputRef.current?.click()}
+              style={{ width: 44, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 10, border: '1px solid #d1d9e0', background: '#f8fafc', color: '#4338ca', cursor: 'pointer' }}>
+              <IconAddVideo />
+            </button>
+          </div>
+          <p style={{ fontSize: 10, color: '#94a3b8', margin: '10px 0 0', lineHeight: 1.45 }}>Adds centered on the current page. Drag on the page to move. Drop files on the canvas to add or replace.</p>
+        </div>
+
+        <div style={{ marginBottom: 16, paddingBottom: 16, borderBottom: '1px solid #e8ecf0' }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: '#64748b', letterSpacing: '0.07em', textTransform: 'uppercase', marginBottom: 10 }}>Page</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <button
+              type="button"
+              onClick={addPageAfterCurrent}
+              style={{
+                width: '100%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+                padding: '10px 12px',
+                borderRadius: 8,
+                border: '1px solid rgba(42,172,184,0.35)',
+                background: 'rgba(42,172,184,0.1)',
+                color: '#0f766e',
+                fontSize: 12,
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
+            >
+              <IconAddPage />
+              Add page after current
+            </button>
+            <button
+              type="button"
+              onClick={() => deletePageAtIndex(selPage)}
+              disabled={pages.length <= 1}
+              style={{
+                width: '100%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+                padding: '10px 12px',
+                borderRadius: 8,
+                border: `1px solid ${pages.length <= 1 ? '#e2e8f0' : '#fecaca'}`,
+                background: pages.length <= 1 ? '#f1f5f9' : '#fef2f2',
+                color: pages.length <= 1 ? '#94a3b8' : '#b91c1c',
+                fontSize: 12,
+                fontWeight: 600,
+                cursor: pages.length <= 1 ? 'not-allowed' : 'pointer',
+              }}
+            >
+              <IconTrash />
+              Delete page {pg?.pageNum ?? '—'}
+            </button>
+          </div>
+          <p style={{ fontSize: 10, color: '#94a3b8', margin: '8px 0 0', lineHeight: 1.45 }}>Add inserts a blank page (same size as the current page) after the page you’re on. Delete removes the current page. Undo applies to both.</p>
+        </div>
+
         {selEl ? (
           <>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
@@ -1013,8 +1693,8 @@ function App() {
               {((pageEdits[selEl.id] !== undefined && selEl.type === 'text') || (selEl.type === 'image' && (imageEdits[pg.pageNum]?.[selEl.id]?.src || imageEdits[pg.pageNum]?.[selEl.id]?.removed))) && (
                 <span style={{ fontSize: 9, background: 'rgba(245,158,11,0.15)', color: '#F59E0B', padding: '2px 6px', borderRadius: 4, border: '1px solid rgba(245,158,11,0.3)' }}>EDITED</span>
               )}
-              {selEl.type === 'image' && selEl._userAdded && (
-                <span style={{ fontSize: 9, background: 'rgba(42,172,184,0.12)', color: '#0f766e', padding: '2px 6px', borderRadius: 4, border: '1px solid rgba(42,172,184,0.3)' }}>PLACED</span>
+              {(selEl.type === 'image' || selEl.type === 'video') && selEl._userAdded && (
+                <span style={{ fontSize: 9, background: selEl.type === 'video' ? 'rgba(99,102,241,0.12)' : 'rgba(42,172,184,0.12)', color: selEl.type === 'video' ? '#4338ca' : '#0f766e', padding: '2px 6px', borderRadius: 4, border: selEl.type === 'video' ? '1px solid rgba(99,102,241,0.3)' : '1px solid rgba(42,172,184,0.3)' }}>PLACED</span>
               )}
               <button onClick={() => setSelEl(null)} style={{ marginLeft: 'auto', background: 'none', border: 'none', color: '#444', cursor: 'pointer', fontSize: 20, lineHeight: 1 }}>×</button>
             </div>
@@ -1050,13 +1730,22 @@ function App() {
               </Section>
             )}
 
-            {/* Position */}
-            <Section title="Position & Size">
-              <Row label="X" value={`${Math.round(selEl.x)}px`} mono />
-              <Row label="Y" value={`${Math.round(selEl.y)}px`} mono />
-              <Row label="Width" value={`${Math.round(selEl.w)}px`} mono />
-              <Row label="Height" value={`${Math.round(selEl.h)}px`} mono />
-            </Section>
+            {selEl.type === 'video' && (
+              <Section title="Video">
+                <p style={{ fontSize: 10, color: '#64748b', marginBottom: 10, lineHeight: 1.5 }}>
+                  Replace with another file or remove from the page. Drag a video file onto this frame to replace it. Preview plays muted in a loop.
+                </p>
+                <input type="file" accept="video/*" style={{ display: 'none' }} id={`vid-rep-${selEl.id}`} onChange={e => { const f = e.target.files?.[0]; if (f) handleReplaceVideo(selEl, f); e.target.value = ''; }} />
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <button type="button" onClick={() => document.getElementById(`vid-rep-${selEl.id}`)?.click()} style={{ width: '100%', padding: '8px 10px', background: '#e8ecf0', color: '#334155', border: '1px solid #d1d9e0', borderRadius: 6, fontSize: 11, cursor: 'pointer' }}>
+                    Replace video…
+                  </button>
+                  <button type="button" onClick={() => handleRemoveVideo(selEl)} style={{ width: '100%', padding: '8px 10px', background: '#fef2f2', color: '#b91c1c', border: '1px solid #fecaca', borderRadius: 6, fontSize: 11, cursor: 'pointer' }}>
+                    Remove from page
+                  </button>
+                </div>
+              </Section>
+            )}
 
             {selEl.type === 'image' && (
               <Section title="Image">
@@ -1102,25 +1791,6 @@ function App() {
           </>
         ) : (
           <>
-            <div style={{ fontSize: 12, color: '#888', fontWeight: 700, marginBottom: 16 }}>Design Tokens</div>
-
-            {/* Page info */}
-            <Section title="Page Info">
-              <Row label="Layout" value={pg?.templateId || 'Unique'} />
-              <Row label="Size" value={pg ? `${Math.round(pg.width / 1.5)} × ${Math.round(pg.height / 1.5)}` : null} mono />
-              <Row label="Text blocks" value={pg?.textElements.length} />
-              <Row label="Shapes" value={pg?.shapes.length} />
-              <Row label="Images (PDF)" value={pg?.images.length} />
-              <Row label="Placed images" value={(addedImages[pg.pageNum] || []).length} />
-              <Row label="Edits this page" value={Object.keys(pageEdits).length || 'None'} />
-              {pg?.bgColor && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8 }}>
-                  <div style={{ width: 20, height: 20, borderRadius: 4, background: pg.bgColor, border: '1px solid rgba(0,0,0,0.12)', flexShrink: 0 }} />
-                  <div><div style={{ fontSize: 9, color: '#64748b' }}>Background</div><div style={{ fontSize: 11, color: '#888', fontFamily: 'monospace' }}>{pg.bgColor.toUpperCase()}</div></div>
-                </div>
-              )}
-            </Section>
-
             {/* Edits summary */}
             {totalEdits > 0 && (
               <Section title={`Edits · ${totalEdits}`}>
@@ -1139,46 +1809,6 @@ function App() {
                   })
                 )}
                 <button onClick={() => { captureBeforeChange(); setEdits({}); }} style={{ width: '100%', marginTop: 4, padding: '5px 0', background: 'transparent', color: '#555', border: '1px solid #d1d9e0', borderRadius: 5, fontSize: 10, cursor: 'pointer' }}>Clear All Edits</button>
-              </Section>
-            )}
-
-            {/* Colors */}
-            {tokens.colors.length > 0 && (
-              <Section title={`Colors · ${tokens.colors.length}`}>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
-                  {tokens.colors.map((c, i) => <ColorPill key={i} color={c} />)}
-                </div>
-                <p style={{ fontSize: 10, color: '#64748b', marginTop: 8 }}>Click swatch to copy hex</p>
-              </Section>
-            )}
-
-            {/* Page colors */}
-            {pg?.docColors.length > 0 && (
-              <Section title={`This Page · ${pg.docColors.length}`}>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                  {pg.docColors.map((c, i) => <ColorPill key={i} color={c} />)}
-                </div>
-              </Section>
-            )}
-
-            {/* Fonts */}
-            {tokens.fonts.length > 0 && (
-              <Section title={`Fonts · ${tokens.fonts.length}`}>
-                {tokens.fonts.map((f, i) => (
-                  <div key={i} style={{ padding: '7px 0', borderBottom: '1px solid #e8ecf0' }}>
-                    <div style={{ fontSize: 13, color: '#334155', fontFamily: f, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f}</div>
-                    <div style={{ fontSize: 10, color: '#64748b', marginTop: 2 }}>Aa Bb 1234</div>
-                  </div>
-                ))}
-              </Section>
-            )}
-
-            {/* Type scale */}
-            {tokens.sizes.length > 0 && (
-              <Section title="Type Scale">
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
-                  {tokens.sizes.map((s, i) => <span key={i} style={{ background: '#f4f6fa', padding: '3px 7px', borderRadius: 4, fontSize: 10, color: '#666', fontFamily: 'monospace', border: '1px solid #e8ecf0' }}>{s}pt</span>)}
-                </div>
               </Section>
             )}
           </>

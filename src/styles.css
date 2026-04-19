@@ -1,4 +1,4 @@
-/* Global styles — light theme (PDF Design Extractor, React inside app-root) */
+/* Global styles — light theme (PDF Design Extractor) */
 *,
 *::before,
 *::after {
@@ -13,9 +13,10 @@ body {
 }
 
 body {
-  background: #f4f6fa;
-  color: #1e293b;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: #f0f2f5;
+  color: #0f172a;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  -webkit-font-smoothing: antialiased;
   overflow: hidden;
 }
 
@@ -29,8 +30,8 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
-  border-radius: 3px;
+  background: #c4cad6;
+  border-radius: 99px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
@@ -41,14 +42,20 @@ button {
   font-family: inherit;
 }
 
+button:focus-visible {
+  outline: 2px solid #0891b2;
+  outline-offset: 2px;
+}
+
 .edit-textarea {
   position: absolute;
-  background: transparent;
-  border: 2px solid #2aacb8;
+  background: rgba(255, 255, 255, 0.96);
+  border: 2px solid #0891b2;
+  border-radius: 3px;
   outline: none;
   resize: none;
   overflow: hidden;
-  padding: 0;
+  padding: 1px 3px;
   margin: 0;
   line-height: 1.2;
   color: #111;
@@ -56,6 +63,7 @@ button {
   cursor: text;
   word-break: break-word;
   white-space: pre-wrap;
+  box-shadow: 0 0 0 4px rgba(8, 145, 178, 0.15), 0 2px 8px rgba(0, 0, 0, 0.07);
 }
 
 .edited-overlay {
