@@ -1,0 +1,26 @@
+<div
+  data-rich-toolbar
+  style="position: absolute; z-index: 50; pointer-events: auto"
+  [style.left.px]="el().x - 1"
+  [style.top.px]="toolbarTop()"
+  [style.width.px]="minMaxW()"
+>
+  <app-rich-text-toolbar [disabled]="false" [fontChoices]="fontChoices()" />
+</div>
+<div
+  #editable
+  class="edit-textarea"
+  contenteditable="true"
+  (blur)="onBlur()"
+  (keydown)="onKeyDown($event)"
+  style="position: absolute; z-index: 49; outline: none; border: 1px solid #2aacb8; padding: 2px"
+  [style.left.px]="el().x - 1"
+  [style.top.px]="el().y - 1"
+  [style.width.px]="el().w + 8"
+  [style.minHeight.px]="el().h + 4"
+  [style.fontSize.px]="el().style.fontSizePx || el().h * 0.72"
+  [style.fontFamily]="el().style.fontFamily || 'sans-serif'"
+  [style.fontWeight]="el().style.fontWeight"
+  [style.fontStyle]="el().style.fontStyle"
+  [style.background]="bgColor() || '#ffffff'"
+></div>

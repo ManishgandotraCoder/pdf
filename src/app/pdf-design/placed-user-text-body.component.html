@@ -1,0 +1,38 @@
+@if (readOnly()) {
+  <div
+    style="
+      height: 100%;
+      overflow: auto;
+      padding: 6px 8px;
+      font-size: 14px;
+      line-height: 1.5;
+      color: #334155;
+      word-break: break-word;
+    "
+    [innerHTML]="(html() || '<p><br></p>') | safeHtml"
+  ></div>
+} @else {
+  <div
+    #editable
+    contenteditable="true"
+    (pointerdown)="onPointerDown($event)"
+    (pointermove)="pointerMove.emit($event)"
+    (pointerup)="pointerUp.emit($event)"
+    (pointercancel)="pointerCancel.emit($event)"
+    (input)="onInput($event)"
+    (focus)="focusFirstEdit.emit()"
+    style="
+      height: 100%;
+      overflow: auto;
+      padding: 6px 8px;
+      outline: none;
+      font-size: 14px;
+      line-height: 1.5;
+      color: #0f172a;
+      word-break: break-word;
+      touch-action: manipulation;
+      cursor: text;
+    "
+    title="Hold Alt (⌥) and drag anywhere here to move the box"
+  ></div>
+}

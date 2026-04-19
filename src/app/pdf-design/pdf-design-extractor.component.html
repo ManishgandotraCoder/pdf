@@ -1,0 +1,1360 @@
+@if (loading()) {
+  <app-loading-screen [progress]="progress()" [done]="doneCount()" [total]="totalPgs()" />
+} @else if (!pages().length) {
+  <app-upload-zone (upload)="handleUpload($event)" />
+} @else {
+  @let pgv = pg()!;
+  <div style="display: flex; height: 100vh; overflow: hidden; background: #f4f6fa">
+    <!-- LEFT -->
+    <div
+      style="
+        width: 228px;
+        min-width: 228px;
+        background: #ffffff;
+        border-right: 1px solid #e8ecf0;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      "
+    >
+      <div style="padding: 20px 14px 16px; border-bottom: 1px solid #e8ecf0">
+        <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 4px">
+          <span style="font-size: 14px; font-weight: 700; color: #0f172a; font-variant-numeric: tabular-nums">
+            Page {{ pgv.pageNum }}/{{ pages().length }}
+          </span>
+          @if (totalEdits() + totalImageMods() > 0) {
+            <span style="font-size: 10px; color: #d97706; font-weight: 600">
+              @if (totalEdits() > 0) {
+                {{ totalEdits() }} text
+              }
+              @if (totalEdits() > 0 && totalImageMods() > 0) {
+                ·
+              }
+              @if (totalImageMods() > 0) {
+                {{ totalImageMods() }} media
+              }
+            </span>
+          }
+        </div>
+      </div>
+      <div style="flex: 1; overflow-y: auto; padding: 8px 8px 16px">
+        <div
+          style="
+            font-size: 9px;
+            color: #64748b;
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+            font-weight: 700;
+            padding: 5px 2px 7px;
+          "
+        >
+          Pages
+        </div>
+        @for (p of pages(); track p.pageNum; let idx = $index) {
+          <div
+            (click)="selPage.set(idx); selEl.set(null); editingId.set(null)"
+            style="
+              margin-bottom: 8px;
+              cursor: pointer;
+              border-radius: 6px;
+              overflow: hidden;
+              border: 2px solid transparent;
+              position: relative;
+              transition: border-color 0.15s;
+            "
+            [style.border-color]="idx === selPage() ? '#2aacb8' : 'transparent'"
+          >
+            <button
+              type="button"
+              [title]="pages().length <= 1 ? 'Cannot delete the only page' : 'Delete page ' + p.pageNum"
+              [attr.aria-label]="'Delete page ' + p.pageNum"
+              (click)="$event.stopPropagation(); deletePageAtIndex(idx)"
+              [disabled]="pages().length <= 1"
+              style="
+                position: absolute;
+                top: 4px;
+                left: 4px;
+                z-index: 2;
+                width: 28px;
+                height: 28px;
+                padding: 0;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                border-radius: 6px;
+                border: 1px solid rgba(0, 0, 0, 0.1);
+                background: rgba(255, 255, 255, 0.95);
+                box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+              "
+              [style.color]="pages().length <= 1 ? '#cbd5e1' : '#b91c1c'"
+              [style.cursor]="pages().length <= 1 ? 'not-allowed' : 'pointer'"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
+                <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6h14zM10 11v6M14 11v6" />
+              </svg>
+            </button>
+            <img [src]="p.thumbUrl" style="width: 100%; display: block" [alt]="'p' + p.pageNum" />
+            <div
+              style="
+                position: absolute;
+                bottom: 4px;
+                right: 4px;
+                background: rgba(0, 0, 0, 0.75);
+                color: #fff;
+                font-size: 9px;
+                padding: 1px 5px;
+                border-radius: 3px;
+                font-weight: 600;
+              "
+            >
+              {{ p.pageNum }}
+            </div>
+            @if (pageHasEdits(p.pageNum) || pageHasImageMods(p.pageNum)) {
+              <div
+                style="
+                  position: absolute;
+                  top: 4px;
+                  right: 4px;
+                  background: #f59e0b;
+                  width: 8px;
+                  height: 8px;
+                  border-radius: 50%;
+                "
+              ></div>
+            }
+          </div>
+        }
+      </div>
+    </div>
+
+    <!-- CENTER -->
+    <div style="flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0">
+      <div
+        style="
+          min-height: 64px;
+          background: #ffffff;
+          border-bottom: 1px solid #e8ecf0;
+          display: flex;
+          align-items: center;
+          padding: 12px 16px;
+          gap: 8px;
+          flex-shrink: 0;
+          flex-wrap: wrap;
+          row-gap: 8px;
+        "
+      >
+        @if (totalEdits() + totalImageMods() > 0) {
+          <span
+            style="
+              font-size: 10px;
+              background: rgba(245, 158, 11, 0.15);
+              color: #f59e0b;
+              padding: 2px 7px;
+              border-radius: 10px;
+              border: 1px solid rgba(245, 158, 11, 0.3);
+            "
+          >
+            @if (totalEdits() > 0) {
+              {{ totalEdits() }} text
+            }
+            @if (totalEdits() > 0 && totalImageMods() > 0) {
+              ·
+            }
+            @if (totalImageMods() > 0) {
+              {{ totalImageMods() }} media
+            }
+          </span>
+        }
+        <div style="flex: 1"></div>
+        <div style="width: 1px; height: 26px; background: #d1d9e0"></div>
+        <button
+          type="button"
+          title="Undo (⌘Z / Ctrl+Z)"
+          aria-label="Undo"
+          (click)="undo()"
+          [disabled]="!canUndo()"
+          style="width: 36px; height: 36px; padding: 0; display: flex; align-items: center; justify-content: center; border-radius: 8px"
+          [style.background]="canUndo() ? 'rgba(42,172,184,0.14)' : '#f1f5f9'"
+          [style.color]="canUndo() ? '#0f766e' : '#94a3b8'"
+          [style.border]="'1px solid ' + (canUndo() ? 'rgba(42,172,184,0.45)' : '#d1d9e0')"
+          [style.cursor]="canUndo() ? 'pointer' : 'not-allowed'"
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
+            <path d="M3 7v6h6" />
+            <path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13" />
+          </svg>
+        </button>
+        <button
+          type="button"
+          title="Redo (⌘⇧Z / Ctrl+Y)"
+          aria-label="Redo"
+          (click)="redo()"
+          [disabled]="!canRedo()"
+          style="width: 36px; height: 36px; padding: 0; display: flex; align-items: center; justify-content: center; border-radius: 8px"
+          [style.background]="canRedo() ? 'rgba(42,172,184,0.14)' : '#f1f5f9'"
+          [style.color]="canRedo() ? '#0f766e' : '#94a3b8'"
+          [style.border]="'1px solid ' + (canRedo() ? 'rgba(42,172,184,0.45)' : '#d1d9e0')"
+          [style.cursor]="canRedo() ? 'pointer' : 'not-allowed'"
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
+            <path d="M21 7v6h-6" />
+            <path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3L21 13" />
+          </svg>
+        </button>
+        <div style="width: 1px; height: 26px; background: #d1d9e0"></div>
+        <button
+          type="button"
+          (click)="newDocument()"
+          style="
+            padding: 5px 9px;
+            background: rgba(42, 172, 184, 0.1);
+            color: #0f766e;
+            border: 1px solid rgba(42, 172, 184, 0.35);
+            border-radius: 5px;
+            font-size: 11px;
+            cursor: pointer;
+            font-weight: 600;
+          "
+        >
+          New
+        </button>
+      </div>
+
+      <div
+        style="
+          flex: 1;
+          overflow: auto;
+          padding: 20px;
+          display: flex;
+          justify-content: center;
+          align-items: flex-start;
+          transition: background 0.15s, outline 0.15s;
+        "
+        [style.outline]="viewerImageDropActive() ? '2px dashed #2aacb8' : 'none'"
+        [style.outline-offset]="'-4px'"
+        [style.background]="viewerImageDropActive() ? 'rgba(42,172,184,0.08)' : 'transparent'"
+        (click)="onStageClick()"
+        (dragover)="handleViewerDragOver($event)"
+        (dragenter)="handleViewerDragEnter($event)"
+        (dragleave)="handleViewerDragLeave($event)"
+        (drop)="handleViewerDrop($event)"
+      >
+        <div
+          #pageStage
+          style="position: relative; display: inline-block; box-shadow: 0 12px 40px rgba(15, 23, 42, 0.1); transform-origin: top center"
+          [style.transform]="stageTransform()"
+        >
+          <canvas #canvas style="display: block"></canvas>
+
+          @for (v of addedVideos()[pgv.pageNum] || []; track v.id) {
+            <video
+              [src]="v.src"
+              muted
+              playsinline
+              loop
+              autoplay
+              style="
+                position: absolute;
+                object-fit: cover;
+                pointer-events: none;
+                border-radius: 2px;
+              "
+              [style.left.px]="v.x"
+              [style.top.px]="v.y"
+              [style.width.px]="v.w"
+              [style.height.px]="v.h"
+            ></video>
+          }
+
+          @for (el of editedTexts(); track el.id) {
+            @if (pageEdits()[el.id] !== undefined && editingId() !== el.id) {
+              <div
+                class="edited-overlay"
+                style="
+                  position: absolute;
+                  color: #222;
+                  padding: 1px 2px;
+                  z-index: 0;
+                "
+                [style.left.px]="el.x - 2"
+                [style.top.px]="el.y - 1"
+                [style.width.px]="el.w + 12"
+                [style.minHeight.px]="el.h + 4"
+                [style.background]="pgv.bgColor || '#ffffff'"
+                [style.fontSize.px]="el.style.fontSizePx || el.h * 0.72"
+                [style.fontFamily]="el.style.fontFamily"
+                [style.fontWeight]="el.style.fontWeight"
+                [style.fontStyle]="el.style.fontStyle"
+              >
+                @if (isProbablyHtml(pageEdits()[el.id])) {
+                  <span [innerHTML]="pageEdits()[el.id] | safeHtml"></span>
+                } @else {
+                  {{ pageEdits()[el.id] }}
+                }
+              </div>
+            }
+          }
+
+          @if (editingTextEl(); as tel) {
+            <app-inline-editor
+              [el]="tel"
+              [bgColor]="pgv.bgColor"
+              [initialValue]="textEditOrOriginal(tel.id, tel.content)"
+              [fontChoices]="tokens().fonts"
+              (save)="setEdit(pgv.pageNum, tel.id, $event, 'commit'); editingId.set(null)"
+              (cancel)="editingId.set(null)"
+            />
+          }
+
+          @if (editorMode() === 'edit') {
+            <div
+              style="position: absolute; top: 0; left: 0; pointer-events: none; z-index: 1"
+              [style.width.px]="pgv.width"
+              [style.height.px]="pgv.height"
+            >
+              @for (el of overlayEls(); track el.id; let oi = $index) {
+                @let bord =
+                  el.type === 'text'
+                    ? '#2aacb8'
+                    : el.type === 'image'
+                      ? '#f59e0b'
+                      : el.type === 'video'
+                        ? '#6366f1'
+                        : '#8b5cf6';
+                @let bgTint =
+                  el.type === 'text'
+                    ? 'rgba(42,172,184,0.1)'
+                    : el.type === 'image'
+                      ? 'rgba(245,158,11,0.1)'
+                      : el.type === 'video'
+                        ? 'rgba(99,102,241,0.12)'
+                        : 'rgba(139,92,246,0.1)';
+                @let ob = overlayBounds(el);
+                @let active = selEl()?.id === el.id;
+                @let hasEdit = el.type === 'text' && pageEdits()[el.id] !== undefined;
+                @let imgEdited =
+                  el.type === 'image' &&
+                  !el._userAdded &&
+                  (imageEdits()[pgv.pageNum]?.[el.id]?.src || imageEdits()[pgv.pageNum]?.[el.id]?.removed);
+                @let imgUser = el.type === 'image' && el._userAdded;
+                @let vidUser = el.type === 'video';
+                @let imgRemoved = el.type === 'image' && imageEdits()[pgv.pageNum]?.[el.id]?.removed;
+                @let placementDrag = el.type === 'image' || el.type === 'video';
+                @let imgCursor =
+                  !placementDrag
+                    ? el.type === 'text'
+                      ? 'text'
+                      : 'pointer'
+                    : el.type === 'image' && imgRemoved
+                      ? 'pointer'
+                      : draggingImageId() === el.id
+                        ? 'grabbing'
+                        : 'grab';
+                <div
+                  style="position: absolute; pointer-events: auto; box-sizing: border-box; outline-offset: 1px"
+                  [style.cursor]="imgCursor"
+                  [style.touch-action]="placementDrag ? 'none' : 'auto'"
+                  [style.left.px]="ob.x"
+                  [style.top.px]="ob.y"
+                  [style.width.px]="max2(ob.w)"
+                  [style.height.px]="max2(ob.h)"
+                  [style.border]="'1px solid ' + (active ? bord : bord + '66')"
+                  [style.background]="active ? bgTint : 'transparent'"
+                  [style.outline]="
+                    hasEdit || imgEdited || imgUser
+                      ? '1.5px solid #f59e0b'
+                      : vidUser
+                        ? '1.5px solid #6366f1'
+                        : 'none'
+                  "
+                  (click)="onOverlayClick($event, el, placementDrag, active)"
+                  (dblclick)="onOverlayDblClick($event, el)"
+                  (pointerdown)="onPlacementPointerDown($event, el, placementDrag)"
+                  (pointermove)="onPointerMoveMaybe($event, placementDrag)"
+                  (pointerup)="onPointerUpMaybe($event, placementDrag)"
+                  (pointercancel)="onPointerUpMaybe($event, placementDrag)"
+                  (mouseenter)="onOverlayEnter($event, active, bgTint)"
+                  (mouseleave)="onOverlayLeave($event, active)"
+                ></div>
+              }
+            </div>
+          }
+
+          @for (t of addedTables()[pgv.pageNum] || []; track t.id) {
+            @let selected = selEl()?.id === t.id;
+            @let readOnly = editorMode() !== 'edit';
+            <div
+              style="
+                position: absolute;
+                z-index: 2;
+                overflow: hidden;
+                border-radius: 2px;
+                box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+                box-sizing: border-box;
+                pointer-events: auto;
+              "
+              [style.left.px]="t.x"
+              [style.top.px]="t.y"
+              [style.width.px]="t.w"
+              [style.height.px]="t.h"
+              [style.outline]="selected ? '2px solid #059669' : 'none'"
+              [style.pointer-events]="readOnly ? 'none' : 'auto'"
+              (mousedown)="$event.stopPropagation()"
+              (click)="$event.stopPropagation(); selEl.set(t); editingId.set(null)"
+            >
+              @if (!readOnly) {
+                <div
+                  role="presentation"
+                  (pointerdown)="$event.stopPropagation(); onImagePointerDown($event, t)"
+                  (pointermove)="onImagePointerMove($event)"
+                  (pointerup)="onImagePointerUp($event)"
+                  (pointercancel)="onImagePointerUp($event)"
+                  style="
+                    height: 22px;
+                    flex-shrink: 0;
+                    touch-action: none;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    gap: 6px;
+                    font-size: 12px;
+                    font-weight: 600;
+                    user-select: none;
+                    background: linear-gradient(180deg, rgba(5, 150, 105, 0.22), rgba(5, 150, 105, 0.08));
+                    border-bottom: 1px solid rgba(5, 150, 105, 0.35);
+                  "
+                  [style.cursor]="draggingImageId() === t.id ? 'grabbing' : 'grab'"
+                  title="Drag to move table"
+                >
+                  <span aria-hidden style="letter-spacing: -2px; opacity: 0.7">⋮⋮</span>
+                  <span style="font-size: 10px">Drag</span>
+                </div>
+              }
+              <div [style.height]="readOnly ? '100%' : 'calc(100% - 22px)'" style="overflow: auto">
+                <app-placed-table-grid
+                  [rows]="t.rows"
+                  [cols]="t.cols"
+                  [cells]="t.cells"
+                  [readOnly]="readOnly"
+                  (cellHtmlInput)="updateTableCellHtml(t.id, $event.row, $event.col, $event.html)"
+                  (cellFocus)="onPlacedTableCellFocus(t.id)"
+                />
+              </div>
+            </div>
+          }
+
+          @for (rt of addedRichTexts()[pgv.pageNum] || []; track rt.id) {
+            @let selected = selEl()?.id === rt.id;
+            @let readOnly = editorMode() !== 'edit';
+            <div
+              style="
+                position: absolute;
+                z-index: 2;
+                overflow: hidden;
+                border-radius: 2px;
+                box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+                box-sizing: border-box;
+                background: #ffffff;
+                display: flex;
+                flex-direction: column;
+              "
+              [style.left.px]="rt.x"
+              [style.top.px]="rt.y"
+              [style.width.px]="rt.w"
+              [style.height.px]="rt.h"
+              [style.outline]="selected ? '2px solid #2aacb8' : 'none'"
+              [style.pointer-events]="readOnly ? 'none' : 'auto'"
+              (mousedown)="$event.stopPropagation()"
+              (click)="$event.stopPropagation(); selEl.set(rt); editingId.set(null)"
+            >
+              @if (!readOnly) {
+                <div
+                  role="presentation"
+                  (pointerdown)="$event.stopPropagation(); onImagePointerDown($event, rt)"
+                  (pointermove)="onImagePointerMove($event)"
+                  (pointerup)="onImagePointerUp($event)"
+                  (pointercancel)="onImagePointerUp($event)"
+                  style="
+                    height: 22px;
+                    flex-shrink: 0;
+                    touch-action: none;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    gap: 6px;
+                    font-size: 12px;
+                    font-weight: 600;
+                    user-select: none;
+                    background: linear-gradient(180deg, rgba(42, 172, 184, 0.22), rgba(42, 172, 184, 0.08));
+                    border-bottom: 1px solid rgba(42, 172, 184, 0.35);
+                  "
+                  [style.cursor]="draggingImageId() === rt.id ? 'grabbing' : 'grab'"
+                  title="Drag to move · or hold Alt (⌥) and drag inside the text"
+                >
+                  <span aria-hidden style="letter-spacing: -2px; opacity: 0.7">⋮⋮</span>
+                  <span style="font-size: 10px">Drag</span>
+                </div>
+              }
+              <div style="flex: 1; min-height: 0; overflow: hidden">
+                <app-placed-user-text-body
+                  [html]="rt.html"
+                  [readOnly]="readOnly"
+                  (htmlChange)="updateUserTextHtml(rt.id, $event)"
+                  (focusFirstEdit)="onPlacedUserTextFocus(rt.id)"
+                  (pointerMove)="onImagePointerMove($event)"
+                  (pointerUp)="onImagePointerUp($event)"
+                  (pointerCancel)="onImagePointerUp($event)"
+                  (altDragPointerDown)="onAltDragUserText($event, rt)"
+                />
+              </div>
+            </div>
+          }
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT -->
+    <div
+      style="
+        width: 312px;
+        min-width: 312px;
+        background: #ffffff;
+        border-left: 1px solid #e8ecf0;
+        overflow: auto;
+        padding: 20px 16px 28px;
+      "
+    >
+      <input
+        #addImageInput
+        type="file"
+        accept="image/*"
+        style="display: none"
+        (change)="onAddImageFile($event)"
+      />
+      <input
+        #addVideoInput
+        type="file"
+        accept="video/*"
+        style="display: none"
+        (change)="onAddVideoFile($event)"
+      />
+
+      <div style="margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px solid #e8ecf0">
+        <div
+          style="
+            font-size: 10px;
+            font-weight: 700;
+            color: #64748b;
+            letter-spacing: 0.07em;
+            text-transform: uppercase;
+            margin-bottom: 8px;
+          "
+        >
+          Page zoom
+        </div>
+        <div style="display: flex; align-items: center; gap: 10px">
+          <input
+            type="range"
+            min="25"
+            max="150"
+            step="1"
+            [value]="Math.round(zoom() * 100)"
+            (input)="zoom.set(+(($any($event.target)).value) / 100)"
+            aria-label="Page zoom"
+            style="flex: 1; height: 6px; accent-color: #2aacb8; cursor: pointer; min-width: 0"
+          />
+          <span
+            style="
+              font-size: 12px;
+              font-weight: 700;
+              color: #334155;
+              font-variant-numeric: tabular-nums;
+              min-width: 40px;
+              text-align: right;
+            "
+            >{{ Math.round(zoom() * 100) }}%</span
+          >
+        </div>
+        <div
+          style="
+            display: flex;
+            justify-content: space-between;
+            margin-top: 6px;
+            font-size: 10px;
+            font-weight: 600;
+            color: #94a3b8;
+          "
+        >
+          <span>25%</span><span>150%</span>
+        </div>
+      </div>
+
+      <div style="margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px solid #e8ecf0">
+        <div
+          style="
+            font-size: 10px;
+            font-weight: 700;
+            color: #64748b;
+            letter-spacing: 0.07em;
+            text-transform: uppercase;
+            margin-bottom: 10px;
+          "
+        >
+          Workspace
+        </div>
+        <div style="display: flex; gap: 8px; align-items: center">
+          <button
+            type="button"
+            title="View — read without selection outlines"
+            (click)="editorMode.set('view'); editingId.set(null); selEl.set(null)"
+            style="flex: 1; height: 40px; display: flex; align-items: center; justify-content: center; gap: 6px; border-radius: 8px; cursor: pointer; font-size: 12px; font-weight: 600; transition: background 0.15s, border-color 0.15s, color 0.15s"
+            [style.border]="'1px solid ' + (editorMode() === 'view' ? '#6366f1' : 'rgba(99,102,241,0.35)')"
+            [style.background]="editorMode() === 'view' ? '#6366f1' : 'rgba(99,102,241,0.1)'"
+            [style.color]="editorMode() === 'view' ? '#fff' : '#4338ca'"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
+              <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z" />
+              <circle cx="12" cy="12" r="3" />
+            </svg>
+            View
+          </button>
+          <button
+            type="button"
+            (click)="editorMode.set('edit')"
+            style="flex: 1; height: 40px; display: flex; align-items: center; justify-content: center; gap: 6px; border-radius: 8px; cursor: pointer; font-size: 12px; font-weight: 600; transition: background 0.15s, border-color 0.15s, color 0.15s"
+            [style.border]="'1px solid ' + (editorMode() === 'edit' ? '#2aacb8' : 'rgba(42,172,184,0.4)')"
+            [style.background]="editorMode() === 'edit' ? '#2aacb8' : 'rgba(42,172,184,0.12)'"
+            [style.color]="editorMode() === 'edit' ? '#fff' : '#0f766e'"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
+              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+            </svg>
+            Edit
+          </button>
+        </div>
+      </div>
+
+      <div style="margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px solid #e8ecf0">
+        <div
+          style="
+            font-size: 10px;
+            font-weight: 700;
+            color: #64748b;
+            letter-spacing: 0.07em;
+            text-transform: uppercase;
+            margin-bottom: 10px;
+          "
+        >
+          Add to page
+        </div>
+        <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap">
+          <button
+            type="button"
+            [disabled]="editorMode() === 'view'"
+            (click)="activeAddTool.set('image'); clickAddImage()"
+            style="width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; border-radius: 10px; transition: background 0.15s, border-color 0.15s, color 0.15s"
+            [style.border]="'1.5px solid ' + (activeAddTool() === 'image' ? '#2aacb8' : 'rgba(42,172,184,0.45)')"
+            [style.background]="activeAddTool() === 'image' ? '#2aacb8' : 'rgba(42,172,184,0.14)'"
+            [style.color]="activeAddTool() === 'image' ? '#fff' : '#0f766e'"
+            [style.cursor]="editorMode() === 'view' ? 'not-allowed' : 'pointer'"
+            [style.opacity]="editorMode() === 'view' ? 0.45 : 1"
+          >
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
+              <rect x="3" y="3" width="18" height="18" rx="2" />
+              <circle cx="8.5" cy="8.5" r="1.5" fill="currentColor" stroke="none" />
+              <path d="M21 15l-5-5L5 21" />
+            </svg>
+          </button>
+          <button
+            type="button"
+            [disabled]="editorMode() === 'view'"
+            (click)="addRichTextBlock()"
+            style="width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; border-radius: 10px"
+            [style.border]="'1.5px solid ' + (activeAddTool() === 'userText' ? '#0d9488' : 'rgba(13,148,136,0.45)')"
+            [style.background]="activeAddTool() === 'userText' ? '#0d9488' : 'rgba(13,148,136,0.12)'"
+            [style.color]="activeAddTool() === 'userText' ? '#fff' : '#0f766e'"
+            [style.cursor]="editorMode() === 'view' ? 'not-allowed' : 'pointer'"
+            [style.opacity]="editorMode() === 'view' ? 0.45 : 1"
+          >
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
+              <path d="M4 7V5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" />
+              <path d="M4 15h8" />
+              <path d="M8 12v6" />
+            </svg>
+          </button>
+          <button
+            type="button"
+            [disabled]="editorMode() === 'view'"
+            (click)="activeAddTool.set('video'); clickAddVideo()"
+            style="width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; border-radius: 10px"
+            [style.border]="'1.5px solid ' + (activeAddTool() === 'video' ? '#4f46e5' : 'rgba(79,70,229,0.45)')"
+            [style.background]="activeAddTool() === 'video' ? '#4f46e5' : 'rgba(79,70,229,0.14)'"
+            [style.color]="activeAddTool() === 'video' ? '#fff' : '#4338ca'"
+            [style.cursor]="editorMode() === 'view' ? 'not-allowed' : 'pointer'"
+            [style.opacity]="editorMode() === 'view' ? 0.45 : 1"
+          >
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
+              <rect x="2" y="5" width="14" height="14" rx="2" />
+              <path d="M18 9l4 3v6l-4-3V9z" fill="currentColor" stroke="none" />
+            </svg>
+          </button>
+          <button
+            type="button"
+            [disabled]="editorMode() === 'view'"
+            (click)="addDynamicTable()"
+            style="width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; border-radius: 10px"
+            [style.border]="'1.5px solid ' + (activeAddTool() === 'table' ? '#059669' : 'rgba(5,150,105,0.45)')"
+            [style.background]="activeAddTool() === 'table' ? '#059669' : 'rgba(5,150,105,0.12)'"
+            [style.color]="activeAddTool() === 'table' ? '#fff' : '#047857'"
+            [style.cursor]="editorMode() === 'view' ? 'not-allowed' : 'pointer'"
+            [style.opacity]="editorMode() === 'view' ? 0.45 : 1"
+          >
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
+              <rect x="3" y="3" width="18" height="18" rx="2" />
+              <path d="M3 9h18M3 15h18M9 3v18M15 3v18" />
+            </svg>
+          </button>
+        </div>
+        <p style="font-size: 10px; color: #94a3b8; margin: 10px 0 0; line-height: 1.45">
+          Image, rich text, video, or table is added centered on the current page. Use the text box for full font and
+          formatting controls. Drag the colored top strip to move. Drop files on the canvas to add or replace
+          images/videos.
+        </p>
+      </div>
+
+      <div style="margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px solid #e8ecf0">
+        <div
+          style="
+            font-size: 10px;
+            font-weight: 700;
+            color: #64748b;
+            letter-spacing: 0.07em;
+            text-transform: uppercase;
+            margin-bottom: 10px;
+          "
+        >
+          Page
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 8px">
+          <button
+            type="button"
+            (click)="addPageAfterCurrent()"
+            style="
+              width: 100%;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              gap: 8px;
+              padding: 10px 12px;
+              border-radius: 8px;
+              border: 1px solid rgba(42, 172, 184, 0.35);
+              background: rgba(42, 172, 184, 0.1);
+              color: #0f766e;
+              font-size: 12px;
+              font-weight: 600;
+              cursor: pointer;
+            "
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
+              <path d="M4 3h11l5 5v13a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z" />
+              <path d="M12 11v6M9 14h6" />
+            </svg>
+            Add page after current
+          </button>
+          <button
+            type="button"
+            [disabled]="pages().length <= 1"
+            (click)="deletePageAtIndex(selPage())"
+            style="
+              width: 100%;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              gap: 8px;
+              padding: 10px 12px;
+              border-radius: 8px;
+              font-size: 12px;
+              font-weight: 600;
+            "
+            [style.border]="'1px solid ' + (pages().length <= 1 ? '#e2e8f0' : '#fecaca')"
+            [style.background]="pages().length <= 1 ? '#f1f5f9' : '#fef2f2'"
+            [style.color]="pages().length <= 1 ? '#94a3b8' : '#b91c1c'"
+            [style.cursor]="pages().length <= 1 ? 'not-allowed' : 'pointer'"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
+              <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6h14zM10 11v6M14 11v6" />
+            </svg>
+            Delete page {{ pgv.pageNum }}
+          </button>
+        </div>
+        <p style="font-size: 10px; color: #94a3b8; margin: 8px 0 0; line-height: 1.45">
+          Add inserts a blank page (same size as the current page) after the page you’re on. Delete removes the current
+          page. Undo applies to both.
+        </p>
+      </div>
+
+      @if (selEl(); as sel) {
+        <div>
+          <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 16px">
+            <span
+              style="
+                font-size: 9px;
+                padding: 2px 7px;
+                border-radius: 4px;
+                font-weight: 700;
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+                color: #fff;
+              "
+              [style.background]="typeBadgeColor(sel.type)"
+              >{{ typeBadgeLabel(sel.type) }}</span
+            >
+            <span style="font-size: 12px; color: #888; font-weight: 600">Inspector</span>
+            @if (
+              (pageEdits()[sel.id] !== undefined && sel.type === 'text') ||
+              (sel.type === 'image' &&
+                (imageEdits()[pgv.pageNum]?.[sel.id]?.src || imageEdits()[pgv.pageNum]?.[sel.id]?.removed))
+            ) {
+              <span
+                style="
+                  font-size: 9px;
+                  background: rgba(245, 158, 11, 0.15);
+                  color: #f59e0b;
+                  padding: 2px 6px;
+                  border-radius: 4px;
+                  border: 1px solid rgba(245, 158, 11, 0.3);
+                "
+                >EDITED</span
+              >
+            }
+            @if ((sel.type === 'image' || sel.type === 'video' || sel.type === 'table' || sel.type === 'userText') && sel._userAdded) {
+              <span
+                style="font-size: 9px; padding: 2px 6px; border-radius: 4px"
+                [style.background]="placedBadgeBg(sel.type)"
+                [style.color]="placedBadgeColor(sel.type)"
+                [style.border]="placedBadgeBorder(sel.type)"
+                >PLACED</span
+              >
+            }
+            <button
+              type="button"
+              (click)="selEl.set(null)"
+              style="margin-left: auto; background: none; border: none; color: #444; cursor: pointer; font-size: 20px; line-height: 1"
+            >
+              ×
+            </button>
+          </div>
+
+          @if (sel.type === 'text') {
+            <div style="margin-bottom: 18px">
+              <div
+                style="
+                  font-size: 9px;
+                  color: #64748b;
+                  letter-spacing: 1.5px;
+                  text-transform: uppercase;
+                  font-weight: 700;
+                  margin-bottom: 8px;
+                  padding-bottom: 5px;
+                  border-bottom: 1px solid #e8ecf0;
+                "
+              >
+                Edit Text
+              </div>
+              <app-rich-text-editor-block
+                [html]="textEditOrOriginal(sel.id, sel.content)"
+                (htmlChange)="onInspectorTextHtml($event, pgv.pageNum, sel.id)"
+                [disabled]="editorMode() === 'view'"
+                [fontChoices]="tokens().fonts"
+                [minHeight]="96"
+              />
+              <div style="display: flex; gap: 6px; margin-top: 8px">
+                <button
+                  type="button"
+                  (click)="setEdit(pgv.pageNum, sel.id, sel.content, 'commit')"
+                  style="
+                    flex: 1;
+                    padding: 5px 0;
+                    background: #e8ecf0;
+                    color: #888;
+                    border: 1px solid #d1d9e0;
+                    border-radius: 5px;
+                    font-size: 10px;
+                    cursor: pointer;
+                  "
+                >
+                  Reset
+                </button>
+                <button
+                  type="button"
+                  (click)="editorMode.set('edit'); editingId.set(sel.id)"
+                  style="
+                    flex: 1;
+                    padding: 5px 0;
+                    background: rgba(42, 172, 184, 0.15);
+                    color: #2aacb8;
+                    border: 1px solid rgba(42, 172, 184, 0.3);
+                    border-radius: 5px;
+                    font-size: 10px;
+                    cursor: pointer;
+                  "
+                >
+                  Edit on Page
+                </button>
+              </div>
+              @if (pageEdits()[sel.id] !== undefined && pageEdits()[sel.id] !== sel.content) {
+                <div
+                  style="
+                    margin-top: 8px;
+                    padding: 6px 8px;
+                    background: rgba(245, 158, 11, 0.08);
+                    border-radius: 5px;
+                    border: 1px solid rgba(245, 158, 11, 0.2);
+                  "
+                >
+                  <div style="font-size: 9px; color: #f59e0b; margin-bottom: 4px">ORIGINAL TEXT</div>
+                  <div style="font-size: 11px; color: #666; word-break: break-word">{{ sel.content }}</div>
+                </div>
+              }
+            </div>
+          }
+
+          @if (sel.type === 'userText' && userTextForInspector(); as ut) {
+            <div style="margin-bottom: 18px">
+              <div
+                style="
+                  font-size: 9px;
+                  color: #64748b;
+                  letter-spacing: 1.5px;
+                  text-transform: uppercase;
+                  font-weight: 700;
+                  margin-bottom: 8px;
+                  padding-bottom: 5px;
+                  border-bottom: 1px solid #e8ecf0;
+                "
+              >
+                Placed text
+              </div>
+              @if (editorMode() === 'edit') {
+                <div style="margin-bottom: 10px">
+                  <app-rich-text-toolbar [disabled]="false" [fontChoices]="tokens().fonts" />
+                  <p style="font-size: 10px; color: #64748b; margin: 8px 0 0; line-height: 1.45">
+                    Edit here or in the box on the page. Select text, then use the toolbar for fonts, sizes, colors,
+                    lists, and links.
+                  </p>
+                </div>
+              }
+              <app-rich-text-editor-block
+                [html]="ut.html"
+                (htmlChange)="editorMode.set('edit'); updateUserTextHtml(sel.id, $event)"
+                [disabled]="editorMode() === 'view'"
+                [fontChoices]="tokens().fonts"
+                [minHeight]="120"
+              />
+              <div style="display: flex; gap: 10px; margin-top: 10px; margin-bottom: 8px; align-items: center">
+                <label style="font-size: 10px; color: #64748b; width: 44px">Width</label>
+                <input
+                  type="number"
+                  min="80"
+                  max="2000"
+                  [value]="Math.round(ut.w)"
+                  (input)="patchUserTextWidth(sel, $event)"
+                  style="flex: 1; padding: 6px 8px; border-radius: 6px; border: 1px solid #d1d9e0; font-size: 12px"
+                />
+              </div>
+              <div style="display: flex; gap: 10px; margin-bottom: 12px; align-items: center">
+                <label style="font-size: 10px; color: #64748b; width: 44px">Height</label>
+                <input
+                  type="number"
+                  min="60"
+                  max="2000"
+                  [value]="Math.round(ut.h)"
+                  (input)="patchUserTextHeight(sel, $event)"
+                  style="flex: 1; padding: 6px 8px; border-radius: 6px; border: 1px solid #d1d9e0; font-size: 12px"
+                />
+              </div>
+              <button
+                type="button"
+                (click)="removeUserTextInspector(sel)"
+                style="
+                  width: 100%;
+                  padding: 8px 10px;
+                  background: #fef2f2;
+                  color: #b91c1c;
+                  border: 1px solid #fecaca;
+                  border-radius: 6px;
+                  font-size: 11px;
+                  cursor: pointer;
+                "
+              >
+                Remove from page
+              </button>
+            </div>
+          }
+
+          @if (sel.type === 'table') {
+            <div style="margin-bottom: 18px">
+              <div
+                style="
+                  font-size: 9px;
+                  color: #64748b;
+                  letter-spacing: 1.5px;
+                  text-transform: uppercase;
+                  font-weight: 700;
+                  margin-bottom: 8px;
+                  padding-bottom: 5px;
+                  border-bottom: 1px solid #e8ecf0;
+                "
+              >
+                Dynamic table
+              </div>
+              @if (editorMode() === 'edit') {
+                <div style="margin-bottom: 10px">
+                  <app-rich-text-toolbar [disabled]="false" [fontChoices]="tokens().fonts" />
+                  <p style="font-size: 10px; color: #64748b; margin: 8px 0 0; line-height: 1.45">
+                    Click a cell on the page, select text, then use the toolbar (bold, lists, colors, link, etc.).
+                  </p>
+                </div>
+              }
+              <p style="font-size: 10px; color: #64748b; margin-bottom: 10px; line-height: 1.5">
+                Change how many rows and columns the grid has, or remove the table from the page. Drag the top strip on
+                the page to move the table.
+              </p>
+              <div style="display: flex; gap: 10px; margin-bottom: 10px; align-items: center">
+                <label style="font-size: 10px; color: #64748b; width: 44px">Rows</label>
+                <input
+                  type="number"
+                  min="1"
+                  max="30"
+                  [value]="sel.rows"
+                  (input)="patchTableRowsFromInspector(sel, $event)"
+                  style="flex: 1; padding: 6px 8px; border-radius: 6px; border: 1px solid #d1d9e0; font-size: 12px"
+                />
+              </div>
+              <div style="display: flex; gap: 10px; margin-bottom: 12px; align-items: center">
+                <label style="font-size: 10px; color: #64748b; width: 44px">Cols</label>
+                <input
+                  type="number"
+                  min="1"
+                  max="30"
+                  [value]="sel.cols"
+                  (input)="patchTableColsFromInspector(sel, $event)"
+                  style="flex: 1; padding: 6px 8px; border-radius: 6px; border: 1px solid #d1d9e0; font-size: 12px"
+                />
+              </div>
+              <button
+                type="button"
+                (click)="removeTableInspector(sel)"
+                style="
+                  width: 100%;
+                  padding: 8px 10px;
+                  background: #fef2f2;
+                  color: #b91c1c;
+                  border: 1px solid #fecaca;
+                  border-radius: 6px;
+                  font-size: 11px;
+                  cursor: pointer;
+                "
+              >
+                Remove from page
+              </button>
+            </div>
+          }
+
+          @if (sel.type === 'video') {
+            <div style="margin-bottom: 18px">
+              <div
+                style="
+                  font-size: 9px;
+                  color: #64748b;
+                  letter-spacing: 1.5px;
+                  text-transform: uppercase;
+                  font-weight: 700;
+                  margin-bottom: 8px;
+                  padding-bottom: 5px;
+                  border-bottom: 1px solid #e8ecf0;
+                "
+              >
+                Video
+              </div>
+              <p style="font-size: 10px; color: #64748b; margin-bottom: 10px; line-height: 1.5">
+                Replace with another file or remove from the page. Drag a video file onto this frame to replace it.
+                Preview plays muted in a loop.
+              </p>
+              <input
+                type="file"
+                accept="video/*"
+                style="display: none"
+                [id]="'vid-rep-' + sel.id"
+                (change)="onVideoReplaceInspector($event, sel)"
+              />
+              <div style="display: flex; flex-direction: column; gap: 8px">
+                <button
+                  type="button"
+                  (click)="clickById('vid-rep-' + sel.id)"
+                  style="
+                    width: 100%;
+                    padding: 8px 10px;
+                    background: #e8ecf0;
+                    color: #334155;
+                    border: 1px solid #d1d9e0;
+                    border-radius: 6px;
+                    font-size: 11px;
+                    cursor: pointer;
+                  "
+                >
+                  Replace video…
+                </button>
+                <button
+                  type="button"
+                  (click)="removeVideoInspector(sel)"
+                  style="
+                    width: 100%;
+                    padding: 8px 10px;
+                    background: #fef2f2;
+                    color: #b91c1c;
+                    border: 1px solid #fecaca;
+                    border-radius: 6px;
+                    font-size: 11px;
+                    cursor: pointer;
+                  "
+                >
+                  Remove from page
+                </button>
+              </div>
+            </div>
+          }
+
+          @if (sel.type === 'image') {
+            <div style="margin-bottom: 18px">
+              <div
+                style="
+                  font-size: 9px;
+                  color: #64748b;
+                  letter-spacing: 1.5px;
+                  text-transform: uppercase;
+                  font-weight: 700;
+                  margin-bottom: 8px;
+                  padding-bottom: 5px;
+                  border-bottom: 1px solid #e8ecf0;
+                "
+              >
+                Image
+              </div>
+              <p style="font-size: 10px; color: #64748b; margin-bottom: 10px; line-height: 1.5">
+                Replace with another file, crop the bitmap, or remove. Drag an image file from your computer onto this
+                image on the page to replace it. PDF images are covered with the page background when removed.
+              </p>
+              <input
+                type="file"
+                accept="image/*"
+                style="display: none"
+                [id]="'img-rep-' + sel.id"
+                (change)="onImageReplaceInspector($event, sel)"
+              />
+              <div style="display: flex; flex-direction: column; gap: 8px">
+                <button
+                  type="button"
+                  (click)="clickById('img-rep-' + sel.id)"
+                  style="
+                    width: 100%;
+                    padding: 8px 10px;
+                    background: #e8ecf0;
+                    color: #334155;
+                    border: 1px solid #d1d9e0;
+                    border-radius: 6px;
+                    font-size: 11px;
+                    cursor: pointer;
+                  "
+                >
+                  Replace image…
+                </button>
+                <button
+                  type="button"
+                  (click)="openCropInspector(sel)"
+                  style="
+                    width: 100%;
+                    padding: 8px 10px;
+                    background: rgba(42, 172, 184, 0.12);
+                    color: #0f766e;
+                    border: 1px solid rgba(42, 172, 184, 0.35);
+                    border-radius: 6px;
+                    font-size: 11px;
+                    cursor: pointer;
+                  "
+                >
+                  Crop…
+                </button>
+                <button
+                  type="button"
+                  (click)="removeImageInspector(sel)"
+                  style="
+                    width: 100%;
+                    padding: 8px 10px;
+                    background: #fef2f2;
+                    color: #b91c1c;
+                    border: 1px solid #fecaca;
+                    border-radius: 6px;
+                    font-size: 11px;
+                    cursor: pointer;
+                  "
+                >
+                  {{ sel._userAdded ? 'Remove from page' : 'Remove (fill with background)' }}
+                </button>
+              </div>
+            </div>
+          }
+
+          @if (sel.type === 'text' && sel.style) {
+            <div style="margin-bottom: 18px">
+              <div
+                style="
+                  font-size: 9px;
+                  color: #64748b;
+                  letter-spacing: 1.5px;
+                  text-transform: uppercase;
+                  font-weight: 700;
+                  margin-bottom: 8px;
+                  padding-bottom: 5px;
+                  border-bottom: 1px solid #e8ecf0;
+                "
+              >
+                Typography
+              </div>
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px">
+                <span style="font-size: 11px; color: #555">Font</span>
+                <span style="font-size: 11px; color: #334155">{{ sel.style.fontFamily }}</span>
+              </div>
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px">
+                <span style="font-size: 11px; color: #555">Size</span>
+                <span style="font-size: 11px; color: #334155; font-family: monospace">{{
+                  sel.style.fontSize ? sel.style.fontSize + 'pt' : '—'
+                }}</span>
+              </div>
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px">
+                <span style="font-size: 11px; color: #555">Weight</span>
+                <span style="font-size: 11px; color: #334155">{{ sel.style.fontWeight }}</span>
+              </div>
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px">
+                <span style="font-size: 11px; color: #555">Style</span>
+                <span style="font-size: 11px; color: #334155">{{ sel.style.fontStyle }}</span>
+              </div>
+            </div>
+          }
+
+          @if (sel.type === 'shape') {
+            @let sh = $any(sel);
+            @if (sh.fill || sh.stroke) {
+              <div style="margin-bottom: 18px">
+                <div
+                  style="
+                    font-size: 9px;
+                    color: #64748b;
+                    letter-spacing: 1.5px;
+                    text-transform: uppercase;
+                    font-weight: 700;
+                    margin-bottom: 8px;
+                    padding-bottom: 5px;
+                    border-bottom: 1px solid #e8ecf0;
+                  "
+                >
+                  Colors
+                </div>
+                @if (sh.fill) {
+                  <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px">
+                    <div
+                      style="width: 22px; height: 22px; border-radius: 5px; border: 1px solid rgba(0, 0, 0, 0.12); flex-shrink: 0"
+                      [style.background]="sh.fill"
+                    ></div>
+                    <div>
+                      <div style="font-size: 9px; color: #64748b">Fill</div>
+                      <div style="font-size: 11px; color: #334155; font-family: monospace">{{ sh.fill.toUpperCase() }}</div>
+                    </div>
+                  </div>
+                }
+                @if (sh.stroke) {
+                  <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px">
+                    <div
+                      style="width: 22px; height: 22px; border-radius: 5px; border: 1px solid rgba(0, 0, 0, 0.12); flex-shrink: 0"
+                      [style.background]="sh.stroke"
+                    ></div>
+                    <div>
+                      <div style="font-size: 9px; color: #64748b">Stroke</div>
+                      <div style="font-size: 11px; color: #334155; font-family: monospace">{{ sh.stroke.toUpperCase() }}</div>
+                    </div>
+                  </div>
+                }
+              </div>
+            }
+          }
+        </div>
+      } @else {
+        @if (totalEdits() > 0) {
+          <div style="margin-bottom: 18px">
+            <div
+              style="
+                font-size: 9px;
+                color: #64748b;
+                letter-spacing: 1.5px;
+                text-transform: uppercase;
+                font-weight: 700;
+                margin-bottom: 8px;
+                padding-bottom: 5px;
+                border-bottom: 1px solid #e8ecf0;
+              "
+            >
+              Edits · {{ totalEdits() }}
+            </div>
+            @for (e of editSummaryEntries(); track e.key) {
+              <div
+                (click)="goToEditSummary(e)"
+                style="
+                  padding: 7px 8px;
+                  background: #f4f6fa;
+                  border-radius: 5px;
+                  margin-bottom: 5px;
+                  border: 1px solid #d1d9e0;
+                  cursor: pointer;
+                "
+              >
+                <div style="font-size: 9px; color: #64748b; margin-bottom: 3px">Page {{ e.pn }}</div>
+                <div style="font-size: 10px; color: #888; margin-bottom: 2px">
+                  Was: <span style="color: #555">{{ e.was }}</span>
+                </div>
+                <div style="font-size: 10px; color: #2aacb8">
+                  Now: <span style="color: #334155">{{ e.now }}</span>
+                </div>
+              </div>
+            }
+            <button
+              type="button"
+              (click)="clearAllEdits()"
+              style="
+                width: 100%;
+                margin-top: 4px;
+                padding: 5px 0;
+                background: transparent;
+                color: #555;
+                border: 1px solid #d1d9e0;
+                border-radius: 5px;
+                font-size: 10px;
+                cursor: pointer;
+              "
+            >
+              Clear All Edits
+            </button>
+          </div>
+        }
+      }
+    </div>
+  </div>
+}
+
+@if (cropModal(); as cm) {
+  <app-image-crop-modal
+    [sourceUrl]="cm.sourceUrl"
+    (apply)="applyCropResult($event)"
+    (cancel)="cropModal.set(null)"
+  />
+}

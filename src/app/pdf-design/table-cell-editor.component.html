@@ -1,0 +1,3 @@
+@if (readOnly()) {
+  <div [innerHTML]="(html() || '\u200b') | safeHtml"></div>
+}

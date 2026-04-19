@@ -14,11 +14,11 @@ describe('App', () => {
     expect(app).toBeTruthy();
   });
 
-  it('should render the React mount point', async () => {
+  it('should render the PDF design extractor', async () => {
     const fixture = TestBed.createComponent(App);
     fixture.detectChanges();
     await fixture.whenStable();
     const compiled = fixture.nativeElement as HTMLElement;
-    expect(compiled.querySelector('#root')).toBeTruthy();
+    expect(compiled.querySelector('app-pdf-design-extractor')).toBeTruthy();
   });
 });
