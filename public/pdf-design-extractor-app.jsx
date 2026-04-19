@@ -50,6 +50,80 @@ function clusterTemplates(pds) {
   return cs;
 }
 
+function readFileAsDataURL(file) {
+  return new Promise((resolve, reject) => {
+    const fr = new FileReader();
+    fr.onload = () => resolve(fr.result);
+    fr.onerror = reject;
+    fr.readAsDataURL(file);
+  });
+}
+
+function regionFromPdfDataUrl(fullUrl, el) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      const c = document.createElement('canvas');
+      c.width = Math.max(1, Math.round(el.w));
+      c.height = Math.max(1, Math.round(el.h));
+      c.getContext('2d').drawImage(img, el.x, el.y, el.w, el.h, 0, 0, el.w, el.h);
+      resolve(c.toDataURL('image/jpeg', 0.92));
+    };
+    img.onerror = () => resolve(null);
+    img.src = fullUrl;
+  });
+}
+
+function cropDataUrl(sourceDataUrl, rect) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      const { x, y, w, h } = rect;
+      const cw = Math.max(1, Math.round(w));
+      const ch = Math.max(1, Math.round(h));
+      const c = document.createElement('canvas');
+      c.width = cw;
+      c.height = ch;
+      c.getContext('2d').drawImage(img, x, y, w, h, 0, 0, cw, ch);
+      resolve(c.toDataURL('image/jpeg', 0.92));
+    };
+    img.onerror = () => resolve(sourceDataUrl);
+    img.src = sourceDataUrl;
+  });
+}
+
+function drawImageFit(ctx, src, x, y, w, h) {
+  return new Promise((resolve) => {
+    const im = new Image();
+    im.onload = () => {
+      ctx.drawImage(im, x, y, w, h);
+      resolve();
+    };
+    im.onerror = () => resolve();
+    im.src = src;
+  });
+}
+
+/** Top-most image at page coordinates (added images checked first — drawn above PDF images). */
+function findImageAtPagePoint(pg, pn, addedMap, px, py) {
+  const inRect = (el) =>
+    el &&
+    px >= el.x &&
+    px <= el.x + el.w &&
+    py >= el.y &&
+    py <= el.y + el.h;
+  const added = addedMap[pn] || [];
+  for (let i = added.length - 1; i >= 0; i--) {
+    const el = added[i];
+    if (el.type === 'image' && inRect(el)) return el;
+  }
+  for (let i = pg.images.length - 1; i >= 0; i--) {
+    const el = pg.images[i];
+    if (inRect(el)) return el;
+  }
+  return null;
+}
+
 // ─── PDF Extraction ───────────────────────────────────────────────────────────
 async function extractPage(page, pageNum) {
   const SCALE = 1.5;
@@ -203,6 +277,62 @@ function TypeBadge({ type }) {
   return <span style={{ background:map[type]||'#555', color:'#fff', fontSize:9, padding:'2px 7px', borderRadius:4, fontWeight:700, textTransform:'uppercase', letterSpacing:0.5 }}>{type}</span>;
 }
 
+function ImageCropModal({ sourceUrl, onApply, onCancel }) {
+  const [natural, setNatural] = useState({ w: 0, h: 0 });
+  const [crop, setCrop] = useState({ x: 0, y: 0, w: 0, h: 0 });
+
+  useEffect(() => {
+    const img = new Image();
+    img.onload = () => {
+      const w = img.naturalWidth;
+      const h = img.naturalHeight;
+      setNatural({ w, h });
+      setCrop({ x: 0, y: 0, w, h });
+    };
+    img.src = sourceUrl;
+  }, [sourceUrl]);
+
+  const apply = async () => {
+    const out = await cropDataUrl(sourceUrl, crop);
+    onApply(out);
+  };
+
+  const pct = (v, max) => (max ? Math.round((v / max) * 100) : 0);
+
+  return (
+    <div style={{ position:'fixed', inset:0, background:'rgba(15,23,42,0.45)', zIndex:100, display:'flex', alignItems:'center', justifyContent:'center', padding:16 }} onClick={onCancel}>
+      <div style={{ background:'#fff', borderRadius:12, padding:16, maxWidth:420, width:'100%', boxShadow:'0 20px 50px rgba(0,0,0,0.15)' }} onClick={e => e.stopPropagation()}>
+        <div style={{ fontSize:13, fontWeight:700, color:'#0f172a', marginBottom:10 }}>Crop image</div>
+        <p style={{ fontSize:11, color:'#64748b', marginBottom:12 }}>Adjust the crop rectangle (pixels from top-left of the current image).</p>
+        {natural.w > 0 && (
+          <div style={{ marginBottom:12, borderRadius:8, overflow:'hidden', border:'1px solid #e8ecf0', background:'#f4f6fa' }}>
+            <img alt="" src={sourceUrl} style={{ width:'100%', display:'block', opacity:0.85 }} />
+          </div>
+        )}
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:12 }}>
+          {['x','y','w','h'].map((k) => (
+            <label key={k} style={{ fontSize:10, color:'#64748b' }}>
+              {k.toUpperCase()} (px)
+              <input type="number" value={Math.round(crop[k])} min={0}
+                onChange={e => setCrop(prev => ({ ...prev, [k]: Math.max(0, +e.target.value || 0) }))}
+                style={{ width:'100%', marginTop:4, padding:'6px 8px', border:'1px solid #d1d9e0', borderRadius:6, fontSize:12 }} />
+            </label>
+          ))}
+        </div>
+        {natural.w > 0 && (
+          <div style={{ fontSize:10, color:'#94a3b8', marginBottom:12 }}>
+            Image {natural.w}×{natural.h}px · crop covers {pct(crop.w, natural.w)}% × {pct(crop.h, natural.h)}%
+          </div>
+        )}
+        <div style={{ display:'flex', gap:8, justifyContent:'flex-end' }}>
+          <button type="button" onClick={onCancel} style={{ padding:'8px 14px', borderRadius:6, border:'1px solid #d1d9e0', background:'#fff', color:'#475569', fontSize:12, cursor:'pointer' }}>Cancel</button>
+          <button type="button" disabled={natural.w === 0 || crop.w < 1 || crop.h < 1} onClick={apply} style={{ padding:'8px 14px', borderRadius:6, border:'none', background:'#2AACB8', color:'#fff', fontSize:12, cursor:'pointer', fontWeight:600, opacity:natural.w === 0 || crop.w < 1 || crop.h < 1 ? 0.5 : 1 }}>Apply crop</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Upload Zone ──────────────────────────────────────────────────────────────
 function UploadZone({ onUpload }) {
   const [drag, setDrag] = useState(false);
@@ -301,31 +431,152 @@ function App() {
   const [selEl, setSelEl]           = useState(null);
   const [editingId, setEditingId]   = useState(null);  // id of element being inline-edited
   const [edits, setEdits]           = useState({});    // { [pageNum]: { [elId]: newText } }
+  const [imageEdits, setImageEdits] = useState({});    // { [pageNum]: { [imageId]: { removed?, src? } } }
+  const [addedImages, setAddedImages] = useState({});  // { [pageNum]: [{ id, x,y,w,h, src, type:'image' }] }
+  const [cropModal, setCropModal]   = useState(null);  // { sourceUrl, resolve: (dataUrl) => void }
   const [templates, setTemplates]   = useState([]);
   const [tokens, setTokens]         = useState({ colors:[], fonts:[], sizes:[] });
   const [overlay, setOverlay]       = useState('text');
   const [showOverlay, setShowOverlay] = useState(true);
   const [zoom, setZoom]             = useState(1);
   const canvasRef = useRef(null);
+  const addImageInputRef = useRef(null);
+  const pageStageRef = useRef(null);
+  const [viewerImageDropActive, setViewerImageDropActive] = useState(false);
+
+  // Undo / redo (snapshots of edits + imageEdits + addedImages)
+  const historyStackRef = useRef([]);
+  const redoStackRef = useRef([]);
+  const isRestoringRef = useRef(false);
+  const editsRef = useRef(edits);
+  const imageEditsRef = useRef(imageEdits);
+  const addedImagesRef = useRef(addedImages);
+  const lastTextHistoryAtRef = useRef(0);
+  const [historyUi, setHistoryUi] = useState(0);
+
+  useEffect(() => { editsRef.current = edits; }, [edits]);
+  useEffect(() => { imageEditsRef.current = imageEdits; }, [imageEdits]);
+  useEffect(() => { addedImagesRef.current = addedImages; }, [addedImages]);
+
+  const captureBeforeChange = useCallback(() => {
+    if (isRestoringRef.current) return;
+    const snap = {
+      edits: JSON.parse(JSON.stringify(editsRef.current)),
+      imageEdits: JSON.parse(JSON.stringify(imageEditsRef.current)),
+      addedImages: JSON.parse(JSON.stringify(addedImagesRef.current)),
+    };
+    historyStackRef.current = [...historyStackRef.current.slice(-39), snap];
+    redoStackRef.current = [];
+    setHistoryUi(u => u + 1);
+  }, []);
+
+  const undo = useCallback(() => {
+    if (historyStackRef.current.length === 0) return;
+    isRestoringRef.current = true;
+    const current = {
+      edits: JSON.parse(JSON.stringify(editsRef.current)),
+      imageEdits: JSON.parse(JSON.stringify(imageEditsRef.current)),
+      addedImages: JSON.parse(JSON.stringify(addedImagesRef.current)),
+    };
+    redoStackRef.current.push(current);
+    const prev = historyStackRef.current.pop();
+    setEdits(prev.edits);
+    setImageEdits(prev.imageEdits);
+    setAddedImages(prev.addedImages);
+    setSelEl(null);
+    setEditingId(null);
+    setHistoryUi(u => u + 1);
+    queueMicrotask(() => { isRestoringRef.current = false; });
+  }, []);
+
+  const redo = useCallback(() => {
+    if (redoStackRef.current.length === 0) return;
+    isRestoringRef.current = true;
+    const current = {
+      edits: JSON.parse(JSON.stringify(editsRef.current)),
+      imageEdits: JSON.parse(JSON.stringify(imageEditsRef.current)),
+      addedImages: JSON.parse(JSON.stringify(addedImagesRef.current)),
+    };
+    historyStackRef.current.push(current);
+    const next = redoStackRef.current.pop();
+    setEdits(next.edits);
+    setImageEdits(next.imageEdits);
+    setAddedImages(next.addedImages);
+    setSelEl(null);
+    setEditingId(null);
+    setHistoryUi(u => u + 1);
+    queueMicrotask(() => { isRestoringRef.current = false; });
+  }, []);
+
+  useEffect(() => {
+    const onKey = (e) => {
+      const mod = e.metaKey || e.ctrlKey;
+      if (!mod) return;
+      const tag = e.target?.tagName;
+      if (tag === 'TEXTAREA' || (tag === 'INPUT' && e.target.type !== 'file')) return;
+      const k = e.key.toLowerCase();
+      if (k === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        undo();
+      } else if (k === 'z' && e.shiftKey) {
+        e.preventDefault();
+        redo();
+      } else if (k === 'y') {
+        e.preventDefault();
+        redo();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [undo, redo]);
+
+  const canUndo = historyStackRef.current.length > 0;
+  const canRedo = redoStackRef.current.length > 0;
+  void historyUi;
 
   // helper: get/set edits for a page
   const getEdit = (pageNum, elId) => edits[pageNum]?.[elId];
-  const setEdit = (pageNum, elId, val) => setEdits(prev => ({
-    ...prev,
-    [pageNum]: { ...(prev[pageNum]||{}), [elId]: val }
-  }));
-  const clearEdit = (pageNum, elId) => setEdits(prev => {
-    const pg = { ...(prev[pageNum]||{}) };
-    delete pg[elId];
-    return { ...prev, [pageNum]: pg };
-  });
+  /** historyMode: 'debounced' (inspector typing), 'commit' (inline save / reset), 'skip' internal */
+  const setEdit = useCallback((pageNum, elId, val, historyMode = 'debounced') => {
+    if (historyMode !== 'skip') {
+      const now = Date.now();
+      const shouldSnap =
+        historyMode === 'commit' ||
+        now - lastTextHistoryAtRef.current > 650;
+      if (shouldSnap) {
+        captureBeforeChange();
+        lastTextHistoryAtRef.current = now;
+      }
+    }
+    setEdits(prev => ({
+      ...prev,
+      [pageNum]: { ...(prev[pageNum] || {}), [elId]: val },
+    }));
+  }, [captureBeforeChange]);
+
+  const clearEdit = useCallback((pageNum, elId) => {
+    captureBeforeChange();
+    setEdits(prev => {
+      const pg = { ...(prev[pageNum] || {}) };
+      delete pg[elId];
+      return { ...prev, [pageNum]: pg };
+    });
+  }, [captureBeforeChange]);
   const pageHasEdits = pn => Object.keys(edits[pn]||{}).length > 0;
   const totalEdits = Object.values(edits).reduce((s,pg)=>s+Object.keys(pg).length,0);
+
+  const pageHasImageMods = pn =>
+    Object.keys(imageEdits[pn] || {}).length > 0 || (addedImages[pn] || []).length > 0;
+  const totalImageMods =
+    Object.values(imageEdits).reduce((s, o) => s + Object.keys(o).length, 0) +
+    Object.values(addedImages).reduce((s, arr) => s + arr.length, 0);
 
   // ── Upload ──
   const handleUpload = useCallback(async file => {
     setLoading(true); setProgress(0); setDoneCount(0);
     setFileName(file.name); setPages([]); setSelPage(0); setSelEl(null); setEdits({}); setEditingId(null);
+    setImageEdits({}); setAddedImages({});
+    historyStackRef.current = []; redoStackRef.current = []; setHistoryUi(u => u + 1);
     try {
       const buf = await file.arrayBuffer();
       const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
@@ -351,18 +602,184 @@ function App() {
     setLoading(false);
   }, []);
 
-  // ── Render page canvas ──
+  const patchImageEdit = useCallback((pageNum, id, patch) => {
+    setImageEdits(prev => ({
+      ...prev,
+      [pageNum]: { ...(prev[pageNum] || {}), [id]: { ...(prev[pageNum]?.[id] || {}), ...patch } },
+    }));
+  }, []);
+
+  const addImageFromFile = useCallback(async (file, centerX, centerY) => {
+    if (!file?.type?.startsWith('image/')) return;
+    const pg = pages[selPage];
+    if (!pg) return;
+    captureBeforeChange();
+    const src = await readFileAsDataURL(file);
+    const pn = pg.pageNum;
+    const id = `user_${pn}_${Date.now()}`;
+    const w = Math.min(240, pg.width * 0.4);
+    const h = Math.min(200, pg.height * 0.3);
+    let x;
+    let y;
+    if (typeof centerX === 'number' && typeof centerY === 'number' && !Number.isNaN(centerX) && !Number.isNaN(centerY)) {
+      x = Math.min(Math.max(centerX - w / 2, 0), Math.max(0, pg.width - w));
+      y = Math.min(Math.max(centerY - h / 2, 0), Math.max(0, pg.height - h));
+    } else {
+      x = Math.max(8, (pg.width - w) / 2);
+      y = Math.max(8, (pg.height - h) / 2);
+    }
+    setAddedImages(prev => ({
+      ...prev,
+      [pn]: [...(prev[pn] || []), { id, type: 'image', x, y, w, h, src, _userAdded: true }],
+    }));
+    setShowOverlay(true);
+    setOverlay('images');
+  }, [pages, selPage, captureBeforeChange]);
+
+  const handleAddImageFile = useCallback((file) => addImageFromFile(file), [addImageFromFile]);
+
+  const handleReplaceImage = useCallback(async (el, file) => {
+    if (!file?.type?.startsWith('image/')) return;
+    captureBeforeChange();
+    const src = await readFileAsDataURL(file);
+    const pg = pages[selPage];
+    if (!pg) return;
+    const pn = pg.pageNum;
+    if (el._userAdded) {
+      setAddedImages(prev => ({
+        ...prev,
+        [pn]: (prev[pn] || []).map(a => (a.id === el.id ? { ...a, src } : a)),
+      }));
+    } else {
+      patchImageEdit(pn, el.id, { removed: false, src });
+    }
+  }, [pages, selPage, patchImageEdit, captureBeforeChange]);
+
+  const handleViewerDragOver = useCallback((e) => {
+    const types = e.dataTransfer?.types ? Array.from(e.dataTransfer.types) : [];
+    if (!types.includes('Files')) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+  }, []);
+
+  const handleViewerDragEnter = useCallback((e) => {
+    const types = e.dataTransfer?.types ? Array.from(e.dataTransfer.types) : [];
+    if (!types.includes('Files')) return;
+    e.preventDefault();
+    setViewerImageDropActive(true);
+  }, []);
+
+  const handleViewerDragLeave = useCallback((e) => {
+    if (!e.currentTarget.contains(e.relatedTarget)) setViewerImageDropActive(false);
+  }, []);
+
+  const handleViewerDrop = useCallback(async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setViewerImageDropActive(false);
+    const file = Array.from(e.dataTransfer.files || []).find(f => f.type.startsWith('image/'));
+    if (!file) return;
+    const inner = pageStageRef.current;
+    const pgLocal = pages[selPage];
+    if (!inner || !pgLocal) return;
+    const r = inner.getBoundingClientRect();
+    const x = (e.clientX - r.left) / zoom;
+    const y = (e.clientY - r.top) / zoom;
+    const hit = findImageAtPagePoint(pgLocal, pgLocal.pageNum, addedImages, x, y);
+    if (hit) {
+      await handleReplaceImage(hit, file);
+    } else {
+      await addImageFromFile(file, x, y);
+    }
+  }, [pages, selPage, zoom, addedImages, handleReplaceImage, addImageFromFile]);
+
+  const handleRemoveImage = useCallback((el) => {
+    const pg = pages[selPage];
+    if (!pg) return;
+    captureBeforeChange();
+    const pn = pg.pageNum;
+    if (el._userAdded) {
+      setAddedImages(prev => ({
+        ...prev,
+        [pn]: (prev[pn] || []).filter(a => a.id !== el.id),
+      }));
+      setSelEl(null);
+    } else {
+      patchImageEdit(pn, el.id, { removed: true, src: undefined });
+    }
+  }, [pages, selPage, patchImageEdit, captureBeforeChange]);
+
+  const openCropForImage = useCallback(async (el) => {
+    const pg = pages[selPage];
+    if (!pg || el.type !== 'image') return;
+    const pn = pg.pageNum;
+    let sourceUrl = el._userAdded
+      ? (addedImages[pn] || []).find(a => a.id === el.id)?.src
+      : imageEdits[pn]?.[el.id]?.src;
+    if (!sourceUrl) sourceUrl = await regionFromPdfDataUrl(pg.fullUrl, el);
+    if (!sourceUrl) return;
+    setCropModal({
+      sourceUrl,
+      resolve: (croppedUrl) => {
+        captureBeforeChange();
+        if (el._userAdded) {
+          setAddedImages(prev => ({
+            ...prev,
+            [pn]: (prev[pn] || []).map(a => (a.id === el.id ? { ...a, src: croppedUrl } : a)),
+          }));
+        } else {
+          setImageEdits(prev => ({
+            ...prev,
+            [pn]: {
+              ...(prev[pn] || {}),
+              [el.id]: { ...(prev[pn]?.[el.id] || {}), removed: false, src: croppedUrl },
+            },
+          }));
+        }
+        setCropModal(null);
+      },
+    });
+  }, [pages, selPage, addedImages, imageEdits, captureBeforeChange]);
+
+  // ── Render page canvas (PDF + image edits + added images) ──
   useEffect(() => {
+    let cancelled = false;
     const pg = pages[selPage];
     if (!pg || !canvasRef.current) return;
     const img = new Image();
-    img.onload = () => {
-      const c = canvasRef.current; if (!c) return;
-      c.width = img.width; c.height = img.height;
-      c.getContext('2d').drawImage(img, 0, 0);
+    img.onload = async () => {
+      if (cancelled) return;
+      const c = canvasRef.current;
+      if (!c) return;
+      const ctx = c.getContext('2d');
+      c.width = img.width;
+      c.height = img.height;
+      ctx.drawImage(img, 0, 0);
+      const pn = pg.pageNum;
+      const iEd = imageEdits[pn] || {};
+      const bg = pg.bgColor || '#ffffff';
+      for (const el of pg.images) {
+        const ed = iEd[el.id];
+        if (ed?.removed) {
+          ctx.fillStyle = bg;
+          ctx.fillRect(el.x, el.y, el.w, el.h);
+        }
+      }
+      for (const el of pg.images) {
+        const ed = iEd[el.id];
+        if (ed?.src && !ed?.removed) {
+          await drawImageFit(ctx, ed.src, el.x, el.y, el.w, el.h);
+          if (cancelled) return;
+        }
+      }
+      for (const el of addedImages[pn] || []) {
+        await drawImageFit(ctx, el.src, el.x, el.y, el.w, el.h);
+        if (cancelled) return;
+      }
     };
     img.src = pg.fullUrl;
-  }, [selPage, pages]);
+    return () => { cancelled = true; };
+  }, [selPage, pages, imageEdits, addedImages]);
 
   if (loading) return <LoadingScreen progress={progress} done={doneCount} total={totalPgs}/>;
   if (!pages.length) return <UploadZone onUpload={handleUpload}/>;
@@ -371,11 +788,12 @@ function App() {
   const tmpl = templates.find(t => t.id === pg?.templateId);
   const pageEdits = edits[pg?.pageNum] || {};
 
-  // Which elements to show in overlay
+  // Which elements to show in overlay (includes user-placed images)
   const overlayEls = pg ? [
     ...(overlay==='text'||overlay==='all' ? pg.textElements : []),
     ...(overlay==='shapes'||overlay==='all' ? pg.shapes : []),
     ...(overlay==='images'||overlay==='all' ? pg.images : []),
+    ...(overlay==='images'||overlay==='all' ? (addedImages[pg.pageNum] || []) : []),
   ] : [];
 
   // Text elements that have been edited on this page
@@ -393,7 +811,13 @@ function App() {
             <span style={{ fontSize:10, color:'#64748b' }}>{pages.length} pages</span>
             <span style={{ fontSize:10, color:'#64748b' }}>·</span>
             <span style={{ fontSize:10, color:'#64748b' }}>{templates.length} layouts</span>
-            {totalEdits > 0 && <span style={{ fontSize:10, color:'#F59E0B' }}>· {totalEdits} edit{totalEdits>1?'s':''}</span>}
+            {(totalEdits + totalImageMods) > 0 && (
+              <span style={{ fontSize:10, color:'#F59E0B' }}>
+                · {totalEdits > 0 && `${totalEdits} text`}
+                {totalEdits > 0 && totalImageMods > 0 && ' · '}
+                {totalImageMods > 0 && `${totalImageMods} image${totalImageMods > 1 ? 's' : ''}`}
+              </span>
+            )}
           </div>
         </div>
 
@@ -419,7 +843,7 @@ function App() {
               <img src={p.thumbUrl} style={{ width:'100%', display:'block' }} alt={`p${p.pageNum}`}/>
               <div style={{ position:'absolute', bottom:4, right:4, background:'rgba(0,0,0,0.75)', color:'#fff', fontSize:9, padding:'1px 5px', borderRadius:3, fontWeight:600 }}>{p.pageNum}</div>
               {p.templateId && <div style={{ position:'absolute', top:4, left:4, background:'rgba(42,172,184,0.88)', color:'#fff', fontSize:8, padding:'1px 5px', borderRadius:3, fontWeight:700 }}>{p.templateId}</div>}
-              {pageHasEdits(p.pageNum) && <div style={{ position:'absolute', top:4, right:4, background:'#F59E0B', width:8, height:8, borderRadius:'50%' }}/>}
+              {(pageHasEdits(p.pageNum) || pageHasImageMods(p.pageNum)) && <div style={{ position:'absolute', top:4, right:4, background:'#F59E0B', width:8, height:8, borderRadius:'50%' }}/>}
             </div>
           ))}
         </div>
@@ -432,12 +856,18 @@ function App() {
         <div style={{ height:46, background:'#ffffff', borderBottom:'1px solid #e8ecf0', display:'flex', alignItems:'center', padding:'0 12px', gap:7, flexShrink:0 }}>
           <span style={{ fontSize:11, color:'#555' }}>Page {pg?.pageNum}/{pages.length}</span>
           {tmpl && <span style={{ fontSize:10, background:'rgba(42,172,184,0.12)', color:'#2AACB8', padding:'2px 7px', borderRadius:10, border:'1px solid rgba(42,172,184,0.25)' }}>Layout {tmpl.id}</span>}
-          {totalEdits > 0 && <span style={{ fontSize:10, background:'rgba(245,158,11,0.15)', color:'#F59E0B', padding:'2px 7px', borderRadius:10, border:'1px solid rgba(245,158,11,0.3)' }}>{totalEdits} edit{totalEdits>1?'s':''}</span>}
+          {(totalEdits + totalImageMods) > 0 && (
+            <span style={{ fontSize:10, background:'rgba(245,158,11,0.15)', color:'#F59E0B', padding:'2px 7px', borderRadius:10, border:'1px solid rgba(245,158,11,0.3)' }}>
+              {totalEdits > 0 && `${totalEdits} text`}
+              {totalEdits > 0 && totalImageMods > 0 && ' · '}
+              {totalImageMods > 0 && `${totalImageMods} img`}
+            </span>
+          )}
 
           <div style={{ flex:1 }}/>
 
           {/* Hint */}
-          <span style={{ fontSize:10, color:'#64748b', fontStyle:'italic' }}>Double-click text to edit</span>
+          <span style={{ fontSize:10, color:'#64748b', fontStyle:'italic' }}>Text: double-click · Images: drag files onto page (replace on image) or Add image</span>
           <div style={{ width:1, height:18, background:'#d1d9e0' }}/>
 
           {/* Overlay */}
@@ -452,17 +882,54 @@ function App() {
           ))}
 
           <div style={{ width:1, height:18, background:'#d1d9e0' }}/>
-          <button onClick={() => {
-            const blob = new Blob([JSON.stringify({ fileName, pages:pages.map(p=>({ pageNum:p.pageNum, bgColor:p.bgColor, templateId:p.templateId, textElements:p.textElements, shapes:p.shapes, images:p.images, docColors:p.docColors, edits:edits[p.pageNum]||{} })), templates, designTokens:tokens, allEdits:edits }, null, 2)], {type:'application/json'});
-            const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=fileName.replace(/\.pdf$/i,'')+'-design.json'; a.click();
+          <button type="button" title="Undo (⌘Z / Ctrl+Z)" onClick={undo} disabled={!canUndo} style={{ padding:'5px 10px', background: canUndo ? '#e8ecf0' : '#f1f5f9', color: canUndo ? '#334155' : '#94a3b8', border:'1px solid #d1d9e0', borderRadius:5, fontSize:11, cursor: canUndo ? 'pointer' : 'not-allowed' }}>Undo</button>
+          <button type="button" title="Redo (⌘⇧Z / Ctrl+Y)" onClick={redo} disabled={!canRedo} style={{ padding:'5px 10px', background: canRedo ? '#e8ecf0' : '#f1f5f9', color: canRedo ? '#334155' : '#94a3b8', border:'1px solid #d1d9e0', borderRadius:5, fontSize:11, cursor: canRedo ? 'pointer' : 'not-allowed' }}>Redo</button>
+
+          <div style={{ width:1, height:18, background:'#d1d9e0' }}/>
+          <input ref={addImageInputRef} type="file" accept="image/*" style={{ display:'none' }} onChange={e => { const f = e.target.files?.[0]; if (f) handleAddImageFile(f); e.target.value = ''; }} />
+          <button type="button" onClick={() => addImageInputRef.current?.click()} style={{ padding:'5px 10px', background:'#e8ecf0', color:'#475569', border:'1px solid #d1d9e0', borderRadius:5, fontSize:11, cursor:'pointer' }}>Add image</button>
+          <button type="button" onClick={() => {
+            const blob = new Blob([JSON.stringify({
+              fileName,
+              pages: pages.map(p => ({
+                pageNum: p.pageNum,
+                bgColor: p.bgColor,
+                templateId: p.templateId,
+                textElements: p.textElements,
+                shapes: p.shapes,
+                images: p.images,
+                docColors: p.docColors,
+                edits: edits[p.pageNum] || {},
+                imageEdits: imageEdits[p.pageNum] || {},
+                addedImages: addedImages[p.pageNum] || [],
+              })),
+              templates,
+              designTokens: tokens,
+              allEdits: edits,
+              imageEdits,
+              addedImages,
+            }, null, 2)], { type: 'application/json' });
+            const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = fileName.replace(/\.pdf$/i, '') + '-design.json'; a.click();
           }} style={{ padding:'5px 12px', background:'#2AACB8', color:'#fff', border:'none', borderRadius:5, fontSize:11, cursor:'pointer', fontWeight:600 }}>Export JSON</button>
-          <button onClick={()=>{setPages([]);setTemplates([]);setTokens({colors:[],fonts:[],sizes:[]});setEdits({});}} style={{ padding:'5px 9px', background:'#e8ecf0', color:'#666', border:'1px solid #d1d9e0', borderRadius:5, fontSize:11, cursor:'pointer' }}>New</button>
+          <button type="button" onClick={() => { setPages([]); setTemplates([]); setTokens({ colors:[], fonts:[], sizes:[] }); setEdits({}); setImageEdits({}); setAddedImages({}); historyStackRef.current = []; redoStackRef.current = []; setHistoryUi(u => u + 1); }} style={{ padding:'5px 9px', background:'#e8ecf0', color:'#666', border:'1px solid #d1d9e0', borderRadius:5, fontSize:11, cursor:'pointer' }}>New</button>
         </div>
 
         {/* Page canvas + overlays */}
-        <div style={{ flex:1, overflow:'auto', padding:20, display:'flex', justifyContent:'center', alignItems:'flex-start' }}
-          onClick={() => { if (!editingId) setSelEl(null); }}>
-          <div style={{ position:'relative', display:'inline-block', boxShadow:'0 12px 40px rgba(15,23,42,0.1)', transform:`scale(${zoom})`, transformOrigin:'top center' }}>
+        <div
+          style={{
+            flex:1, overflow:'auto', padding:20, display:'flex', justifyContent:'center', alignItems:'flex-start',
+            transition: 'background 0.15s, outline 0.15s',
+            outline: viewerImageDropActive ? '2px dashed #2AACB8' : 'none',
+            outlineOffset: -4,
+            background: viewerImageDropActive ? 'rgba(42,172,184,0.08)' : 'transparent',
+          }}
+          onClick={() => { if (!editingId) setSelEl(null); }}
+          onDragOver={handleViewerDragOver}
+          onDragEnter={handleViewerDragEnter}
+          onDragLeave={handleViewerDragLeave}
+          onDrop={handleViewerDrop}
+        >
+          <div ref={pageStageRef} style={{ position:'relative', display:'inline-block', boxShadow:'0 12px 40px rgba(15,23,42,0.1)', transform:`scale(${zoom})`, transformOrigin:'top center' }}>
             <canvas ref={canvasRef} style={{ display:'block' }}/>
 
             {/* ── Edited text overlays (cover original, always shown) ── */}
@@ -495,7 +962,7 @@ function App() {
                   el={el}
                   bgColor={pg.bgColor}
                   initialValue={pageEdits[el.id] ?? el.content}
-                  onSave={val => { setEdit(pg.pageNum, el.id, val); setEditingId(null); }}
+                  onSave={val => { setEdit(pg.pageNum, el.id, val, 'commit'); setEditingId(null); }}
                   onCancel={() => setEditingId(null)}
                 />
               );
@@ -509,6 +976,9 @@ function App() {
                   const bg   = el.type==='text'?'rgba(42,172,184,0.1)':el.type==='image'?'rgba(245,158,11,0.1)':'rgba(139,92,246,0.1)';
                   const active = selEl?.id === el.id;
                   const hasEdit = el.type==='text' && pageEdits[el.id] !== undefined;
+                  const pn = pg.pageNum;
+                  const imgEdited = el.type==='image' && !el._userAdded && (imageEdits[pn]?.[el.id]?.src || imageEdits[pn]?.[el.id]?.removed);
+                  const imgUser = el.type==='image' && el._userAdded;
                   return (
                     <div key={el.id||idx}
                       onClick={e => { e.stopPropagation(); if(editingId) return; setSelEl(active?null:el); }}
@@ -519,7 +989,7 @@ function App() {
                         border:`1px solid ${active?bord:bord+'66'}`,
                         background: active ? bg : 'transparent',
                         boxSizing:'border-box',
-                        outline: hasEdit ? '1.5px solid #F59E0B' : 'none',
+                        outline: hasEdit || imgEdited || imgUser ? '1.5px solid #F59E0B' : 'none',
                         outlineOffset: 1,
                       }}
                       onMouseEnter={e=>{ if(!active&&!editingId) e.currentTarget.style.background=bg; }}
@@ -540,7 +1010,12 @@ function App() {
             <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:16 }}>
               <TypeBadge type={selEl.type}/>
               <span style={{ fontSize:12, color:'#888', fontWeight:600 }}>Inspector</span>
-              {pageEdits[selEl.id] !== undefined && <span style={{ fontSize:9, background:'rgba(245,158,11,0.15)', color:'#F59E0B', padding:'2px 6px', borderRadius:4, border:'1px solid rgba(245,158,11,0.3)' }}>EDITED</span>}
+              {((pageEdits[selEl.id] !== undefined && selEl.type === 'text') || (selEl.type === 'image' && (imageEdits[pg.pageNum]?.[selEl.id]?.src || imageEdits[pg.pageNum]?.[selEl.id]?.removed))) && (
+                <span style={{ fontSize:9, background:'rgba(245,158,11,0.15)', color:'#F59E0B', padding:'2px 6px', borderRadius:4, border:'1px solid rgba(245,158,11,0.3)' }}>EDITED</span>
+              )}
+              {selEl.type === 'image' && selEl._userAdded && (
+                <span style={{ fontSize:9, background:'rgba(42,172,184,0.12)', color:'#0f766e', padding:'2px 6px', borderRadius:4, border:'1px solid rgba(42,172,184,0.3)' }}>PLACED</span>
+              )}
               <button onClick={()=>setSelEl(null)} style={{ marginLeft:'auto', background:'none', border:'none', color:'#444', cursor:'pointer', fontSize:20, lineHeight:1 }}>×</button>
             </div>
 
@@ -559,7 +1034,7 @@ function App() {
                   }}
                 />
                 <div style={{ display:'flex', gap:6, marginTop:8 }}>
-                  <button onClick={() => { setEdit(pg.pageNum, selEl.id, selEl.content); }} style={{ flex:1, padding:'5px 0', background:'#e8ecf0', color:'#888', border:'1px solid #d1d9e0', borderRadius:5, fontSize:10, cursor:'pointer' }}>
+                  <button onClick={() => { setEdit(pg.pageNum, selEl.id, selEl.content, 'commit'); }} style={{ flex:1, padding:'5px 0', background:'#e8ecf0', color:'#888', border:'1px solid #d1d9e0', borderRadius:5, fontSize:10, cursor:'pointer' }}>
                     Reset
                   </button>
                   <button onClick={() => { setEditingId(selEl.id); }} style={{ flex:1, padding:'5px 0', background:'rgba(42,172,184,0.15)', color:'#2AACB8', border:'1px solid rgba(42,172,184,0.3)', borderRadius:5, fontSize:10, cursor:'pointer' }}>
@@ -582,6 +1057,26 @@ function App() {
               <Row label="Width" value={`${Math.round(selEl.w)}px`} mono/>
               <Row label="Height" value={`${Math.round(selEl.h)}px`} mono/>
             </Section>
+
+            {selEl.type === 'image' && (
+              <Section title="Image">
+                <p style={{ fontSize:10, color:'#64748b', marginBottom:10, lineHeight:1.5 }}>
+                  Replace with another file, crop the bitmap, or remove. Drag an image file from your computer onto this image on the page to replace it. PDF images are covered with the page background when removed.
+                </p>
+                <input type="file" accept="image/*" style={{ display:'none' }} id={`img-rep-${selEl.id}`} onChange={e => { const f = e.target.files?.[0]; if (f) handleReplaceImage(selEl, f); e.target.value = ''; }} />
+                <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+                  <button type="button" onClick={() => document.getElementById(`img-rep-${selEl.id}`)?.click()} style={{ width:'100%', padding:'8px 10px', background:'#e8ecf0', color:'#334155', border:'1px solid #d1d9e0', borderRadius:6, fontSize:11, cursor:'pointer' }}>
+                    Replace image…
+                  </button>
+                  <button type="button" onClick={() => openCropForImage(selEl)} style={{ width:'100%', padding:'8px 10px', background:'rgba(42,172,184,0.12)', color:'#0f766e', border:'1px solid rgba(42,172,184,0.35)', borderRadius:6, fontSize:11, cursor:'pointer' }}>
+                    Crop…
+                  </button>
+                  <button type="button" onClick={() => handleRemoveImage(selEl)} style={{ width:'100%', padding:'8px 10px', background:'#fef2f2', color:'#b91c1c', border:'1px solid #fecaca', borderRadius:6, fontSize:11, cursor:'pointer' }}>
+                    {selEl._userAdded ? 'Remove from page' : 'Remove (fill with background)'}
+                  </button>
+                </div>
+              </Section>
+            )}
 
             {/* Typography */}
             {selEl.style && (
@@ -615,7 +1110,8 @@ function App() {
               <Row label="Size" value={pg?`${Math.round(pg.width/1.5)} × ${Math.round(pg.height/1.5)}`:null} mono/>
               <Row label="Text blocks" value={pg?.textElements.length}/>
               <Row label="Shapes" value={pg?.shapes.length}/>
-              <Row label="Images" value={pg?.images.length}/>
+              <Row label="Images (PDF)" value={pg?.images.length}/>
+              <Row label="Placed images" value={(addedImages[pg.pageNum] || []).length}/>
               <Row label="Edits this page" value={Object.keys(pageEdits).length||'None'}/>
               {pg?.bgColor && (
                 <div style={{ display:'flex', alignItems:'center', gap:8, marginTop:8 }}>
@@ -642,7 +1138,7 @@ function App() {
                     );
                   })
                 )}
-                <button onClick={()=>setEdits({})} style={{ width:'100%', marginTop:4, padding:'5px 0', background:'transparent', color:'#555', border:'1px solid #d1d9e0', borderRadius:5, fontSize:10, cursor:'pointer' }}>Clear All Edits</button>
+                <button onClick={() => { captureBeforeChange(); setEdits({}); }} style={{ width:'100%', marginTop:4, padding:'5px 0', background:'transparent', color:'#555', border:'1px solid #d1d9e0', borderRadius:5, fontSize:10, cursor:'pointer' }}>Clear All Edits</button>
               </Section>
             )}
 
@@ -703,6 +1199,14 @@ function App() {
           </>
         )}
       </div>
+
+      {cropModal && (
+        <ImageCropModal
+          sourceUrl={cropModal.sourceUrl}
+          onApply={url => cropModal.resolve(url)}
+          onCancel={() => setCropModal(null)}
+        />
+      )}
     </div>
   );
 }
