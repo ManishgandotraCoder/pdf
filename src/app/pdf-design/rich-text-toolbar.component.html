@@ -1,23 +1,9 @@
-<div
-  data-rich-toolbar
-  style="
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 6px;
-    margin-bottom: 8px;
-    padding: 8px 8px 10px;
-    background: #f8fafc;
-    border: 1px solid #e2e8f0;
-    border-radius: 8px;
-  "
->
+<div data-rich-toolbar class="rich-text-toolbar-wrap">
   <select
     title="Font"
     [disabled]="disabled()"
-    (mousedown)="onFontMouseDown($event)"
     (change)="onFontChange($event)"
-    style="font-size: 11px; padding: 4px 6px; border-radius: 5px; border: 1px solid #cbd5e1; max-width: 140px"
+    style="max-width: 140px"
   >
     <option value="" disabled selected>Font…</option>
     @for (f of fonts(); track f) {
@@ -27,77 +13,41 @@
   <select
     title="Font size"
     [disabled]="disabled()"
-    (mousedown)="onFontMouseDown($event)"
     (change)="onSizeChange($event)"
-    style="font-size: 11px; padding: 4px 6px; border-radius: 5px; border: 1px solid #cbd5e1; width: 72px"
+    style="width: 72px"
   >
     <option value="" disabled selected>Size</option>
-        @for (sz of sizes; track sz) {
-          <option [value]="'' + sz">{{ sz }}px</option>
-        }
+    @for (sz of sizes; track sz) {
+      <option [value]="'' + sz">{{ sz }}px</option>
+    }
   </select>
   <button
     type="button"
+    class="rt-btn rt-btn--bi"
     title="Bold"
     [disabled]="disabled()"
     (mousedown)="$event.preventDefault()"
     (click)="$event.preventDefault(); exec('bold')"
-    style="
-      padding: 3px 7px;
-      font-size: 11px;
-      font-weight: 700;
-      border: 1px solid #cbd5e1;
-      border-radius: 5px;
-      background: #fff;
-      color: #334155;
-      min-width: 26px;
-    "
-    [style.cursor]="disabled() ? 'not-allowed' : 'pointer'"
-    [style.opacity]="disabled() ? 0.45 : 1"
   >
     B
   </button>
   <button
     type="button"
+    class="rt-btn rt-btn--italic"
     title="Italic"
     [disabled]="disabled()"
     (mousedown)="$event.preventDefault()"
     (click)="$event.preventDefault(); exec('italic')"
-    style="
-      padding: 3px 7px;
-      font-size: 11px;
-      font-weight: 600;
-      border: 1px solid #cbd5e1;
-      border-radius: 5px;
-      background: #fff;
-      color: #334155;
-      font-style: italic;
-      min-width: 26px;
-    "
-    [style.cursor]="disabled() ? 'not-allowed' : 'pointer'"
-    [style.opacity]="disabled() ? 0.45 : 1"
   >
     I
   </button>
   <button
     type="button"
+    class="rt-btn rt-btn--underline"
     title="Underline"
     [disabled]="disabled()"
     (mousedown)="$event.preventDefault()"
     (click)="$event.preventDefault(); exec('underline')"
-    style="
-      padding: 3px 7px;
-      font-size: 11px;
-      font-weight: 600;
-      border: 1px solid #cbd5e1;
-      border-radius: 5px;
-      background: #fff;
-      color: #334155;
-      text-decoration: underline;
-      min-width: 26px;
-    "
-    [style.cursor]="disabled() ? 'not-allowed' : 'pointer'"
-    [style.opacity]="disabled() ? 0.45 : 1"
   >
     U
   </button>
@@ -108,7 +58,7 @@
       [disabled]="disabled()"
       (mousedown)="$event.preventDefault()"
       (change)="onForeColor($event)"
-      style="width: 26px; height: 22px; padding: 0; border: 1px solid #cbd5e1; border-radius: 4px"
+      style="width: 28px; height: 24px; padding: 0; border: 1px solid #cbd5e1; border-radius: 6px; cursor: pointer"
       [style.cursor]="disabled() ? 'not-allowed' : 'pointer'"
     />
   </label>
@@ -120,7 +70,7 @@
       [disabled]="disabled()"
       (mousedown)="$event.preventDefault()"
       (change)="onBackColor($event)"
-      style="width: 26px; height: 22px; padding: 0; border: 1px solid #cbd5e1; border-radius: 4px"
+      style="width: 28px; height: 24px; padding: 0; border: 1px solid #cbd5e1; border-radius: 6px; cursor: pointer"
       [style.cursor]="disabled() ? 'not-allowed' : 'pointer'"
     />
   </label>
@@ -132,196 +82,97 @@
       [disabled]="disabled()"
       (mousedown)="$event.preventDefault()"
       (change)="onHilite($event)"
-      style="width: 26px; height: 22px; padding: 0; border: 1px solid #cbd5e1; border-radius: 4px"
+      style="width: 28px; height: 24px; padding: 0; border: 1px solid #cbd5e1; border-radius: 6px; cursor: pointer"
       [style.cursor]="disabled() ? 'not-allowed' : 'pointer'"
     />
   </label>
   <button
     type="button"
+    class="rt-btn"
     title="Insert link"
     [disabled]="disabled()"
     (mousedown)="$event.preventDefault()"
     (click)="$event.preventDefault(); link()"
-    style="
-      padding: 3px 7px;
-      font-size: 11px;
-      font-weight: 600;
-      border: 1px solid #cbd5e1;
-      border-radius: 5px;
-      background: #fff;
-      color: #334155;
-      min-width: 26px;
-    "
-    [style.cursor]="disabled() ? 'not-allowed' : 'pointer'"
-    [style.opacity]="disabled() ? 0.45 : 1"
   >
     Link
   </button>
   <button
     type="button"
+    class="rt-btn"
     title="Align left"
     [disabled]="disabled()"
     (mousedown)="$event.preventDefault()"
     (click)="$event.preventDefault(); exec('justifyLeft')"
-    style="
-      padding: 3px 7px;
-      font-size: 11px;
-      font-weight: 600;
-      border: 1px solid #cbd5e1;
-      border-radius: 5px;
-      background: #fff;
-      color: #334155;
-      min-width: 26px;
-    "
-    [style.cursor]="disabled() ? 'not-allowed' : 'pointer'"
-    [style.opacity]="disabled() ? 0.45 : 1"
   >
     ◧
   </button>
   <button
     type="button"
+    class="rt-btn"
     title="Align center"
     [disabled]="disabled()"
     (mousedown)="$event.preventDefault()"
     (click)="$event.preventDefault(); exec('justifyCenter')"
-    style="
-      padding: 3px 7px;
-      font-size: 11px;
-      font-weight: 600;
-      border: 1px solid #cbd5e1;
-      border-radius: 5px;
-      background: #fff;
-      color: #334155;
-      min-width: 26px;
-    "
-    [style.cursor]="disabled() ? 'not-allowed' : 'pointer'"
-    [style.opacity]="disabled() ? 0.45 : 1"
   >
     ≡
   </button>
   <button
     type="button"
+    class="rt-btn"
     title="Align right"
     [disabled]="disabled()"
     (mousedown)="$event.preventDefault()"
     (click)="$event.preventDefault(); exec('justifyRight')"
-    style="
-      padding: 3px 7px;
-      font-size: 11px;
-      font-weight: 600;
-      border: 1px solid #cbd5e1;
-      border-radius: 5px;
-      background: #fff;
-      color: #334155;
-      min-width: 26px;
-    "
-    [style.cursor]="disabled() ? 'not-allowed' : 'pointer'"
-    [style.opacity]="disabled() ? 0.45 : 1"
   >
     ◨
   </button>
   <button
     type="button"
+    class="rt-btn"
     title="Justify"
     [disabled]="disabled()"
     (mousedown)="$event.preventDefault()"
     (click)="$event.preventDefault(); exec('justifyFull')"
-    style="
-      padding: 3px 7px;
-      font-size: 11px;
-      font-weight: 600;
-      border: 1px solid #cbd5e1;
-      border-radius: 5px;
-      background: #fff;
-      color: #334155;
-      min-width: 26px;
-    "
-    [style.cursor]="disabled() ? 'not-allowed' : 'pointer'"
-    [style.opacity]="disabled() ? 0.45 : 1"
   >
     ⊞
   </button>
   <button
     type="button"
+    class="rt-btn"
     title="Outdent"
     [disabled]="disabled()"
     (mousedown)="$event.preventDefault()"
     (click)="$event.preventDefault(); exec('outdent')"
-    style="
-      padding: 3px 7px;
-      font-size: 11px;
-      font-weight: 600;
-      border: 1px solid #cbd5e1;
-      border-radius: 5px;
-      background: #fff;
-      color: #334155;
-      min-width: 26px;
-    "
-    [style.cursor]="disabled() ? 'not-allowed' : 'pointer'"
-    [style.opacity]="disabled() ? 0.45 : 1"
   >
     ⊢
   </button>
   <button
     type="button"
+    class="rt-btn"
     title="Indent"
     [disabled]="disabled()"
     (mousedown)="$event.preventDefault()"
     (click)="$event.preventDefault(); exec('indent')"
-    style="
-      padding: 3px 7px;
-      font-size: 11px;
-      font-weight: 600;
-      border: 1px solid #cbd5e1;
-      border-radius: 5px;
-      background: #fff;
-      color: #334155;
-      min-width: 26px;
-    "
-    [style.cursor]="disabled() ? 'not-allowed' : 'pointer'"
-    [style.opacity]="disabled() ? 0.45 : 1"
   >
     ⊣
   </button>
   <button
     type="button"
+    class="rt-btn"
     title="Bullet list"
     [disabled]="disabled()"
     (mousedown)="$event.preventDefault()"
     (click)="$event.preventDefault(); exec('insertUnorderedList')"
-    style="
-      padding: 3px 7px;
-      font-size: 11px;
-      font-weight: 600;
-      border: 1px solid #cbd5e1;
-      border-radius: 5px;
-      background: #fff;
-      color: #334155;
-      min-width: 26px;
-    "
-    [style.cursor]="disabled() ? 'not-allowed' : 'pointer'"
-    [style.opacity]="disabled() ? 0.45 : 1"
   >
     •
   </button>
   <button
     type="button"
+    class="rt-btn"
     title="Numbered list"
     [disabled]="disabled()"
     (mousedown)="$event.preventDefault()"
     (click)="$event.preventDefault(); exec('insertOrderedList')"
-    style="
-      padding: 3px 7px;
-      font-size: 11px;
-      font-weight: 600;
-      border: 1px solid #cbd5e1;
-      border-radius: 5px;
-      background: #fff;
-      color: #334155;
-      min-width: 26px;
-    "
-    [style.cursor]="disabled() ? 'not-allowed' : 'pointer'"
-    [style.opacity]="disabled() ? 0.45 : 1"
   >
     1.
   </button>

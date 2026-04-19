@@ -1,49 +1,47 @@
-<div
-  style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; background: #f4f6fa; gap: 28px"
->
-  <div style="display: flex; align-items: center; gap: 10px">
-    <svg width="30" height="30" viewBox="0 0 32 32" fill="none">
-      <rect width="32" height="32" rx="8" fill="#2AACB8" fill-opacity="0.15" />
-      <path d="M8 8h10a6 6 0 0 1 0 12H8V8z" stroke="#2AACB8" stroke-width="2" fill="none" />
-      <line x1="8" y1="14" x2="18" y2="14" stroke="#2AACB8" stroke-width="1.5" />
+<div class="landing">
+  <div class="landing__brand">
+    <svg width="34" height="34" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+      <rect width="32" height="32" rx="9" fill="url(#uz-grad)" />
+      <path d="M8 8h10a6 6 0 0 1 0 12H8V8z" stroke="#0f766e" stroke-width="2" fill="none" />
+      <line x1="8" y1="14" x2="18" y2="14" stroke="#0f766e" stroke-width="1.5" />
+      <defs>
+        <linearGradient id="uz-grad" x1="0" y1="0" x2="32" y2="32" gradientUnits="userSpaceOnUse">
+          <stop stop-color="#5eead4" stop-opacity="0.35" />
+          <stop offset="1" stop-color="#2dd4bf" stop-opacity="0.12" />
+        </linearGradient>
+      </defs>
     </svg>
-    <span style="font-size: 20px; font-weight: 700; letter-spacing: -0.5px; color: #0f172a">PDF Design Extractor</span>
+    <span class="landing__title">PDF Design Extractor</span>
   </div>
-  <p style="color: #555; font-size: 13px; max-width: 360px; text-align: center; line-height: 1.7">
-    Upload any PDF to extract colors, fonts, shapes and layout templates — then edit the text directly
+  <p class="landing__blurb">
+    Upload any PDF to extract colors, fonts, shapes and layout templates — then edit the text directly on the page.
   </p>
   <div
+    class="landing__drop"
+    [class.landing__drop--active]="drag"
     (dragover)="onDragOver($event)"
     (dragleave)="onDragLeave()"
     (drop)="onDrop($event)"
     (click)="fileInput.click()"
-    [style.border]="'2px dashed ' + (drag ? '#2AACB8' : '#94a3b8')"
-    style="border-radius: 14px; padding: 52px 88px; cursor: pointer; text-align: center; transition: all 0.2s"
-    [style.background]="drag ? 'rgba(42,172,184,0.12)' : '#ffffff'"
   >
     <svg
-      width="36"
-      height="36"
+      width="40"
+      height="40"
       viewBox="0 0 24 24"
       fill="none"
-      [attr.stroke]="drag ? '#2AACB8' : '#444'"
+      [attr.stroke]="drag ? '#0d9488' : '#64748b'"
       stroke-width="1.5"
-      style="display: block; margin: 0 auto 14px"
+      style="display: block; margin: 0 auto 1rem"
+      aria-hidden="true"
     >
       <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
       <polyline points="17 8 12 3 7 8" />
       <line x1="12" y1="3" x2="12" y2="15" />
     </svg>
-    <p [style.color]="drag ? '#2AACB8' : '#888'" style="font-size: 14px; margin-bottom: 6px">
-      Drop PDF or <span style="color: #2aacb8">browse</span>
+    <p [style.color]="drag ? '#0d9488' : '#475569'" style="font-size: 0.9rem; margin-bottom: 0.35rem; font-weight: 500">
+      Drop PDF or <span style="color: #0d9488">browse</span>
     </p>
-    <p style="color: #64748b; font-size: 11px">Proposals, reports, brochures — any PDF</p>
+    <p style="color: #64748b; font-size: 0.75rem">Proposals, reports, brochures — any PDF</p>
   </div>
-  <input
-    #fileInput
-    type="file"
-    accept=".pdf"
-    style="display: none"
-    (change)="onFileChange($event)"
-  />
+  <input #fileInput type="file" accept=".pdf" style="display: none" (change)="onFileChange($event)" />
 </div>

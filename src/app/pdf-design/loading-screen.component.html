@@ -1,23 +1,8 @@
-<div
-  style="
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    height: 100vh;
-    background: #f4f6fa;
-    gap: 18px;
-  "
->
-  <div style="font-size: 11px; color: #555; letter-spacing: 1.5px; text-transform: uppercase">Extracting Design Data</div>
-  <div style="width: 300px; height: 4px; background: #e8ecf0; border-radius: 2px">
-    <div
-      [style.width.%]="progress()"
-      style="height: 100%; background: #2aacb8; border-radius: 2px; transition: width 0.3s"
-    ></div>
+<div class="loading-screen">
+  <div class="loading-screen__label">Extracting design data</div>
+  <div class="loading-screen__track">
+    <div class="loading-screen__fill" [style.width.%]="progress()"></div>
   </div>
-  <div style="font-size: 30px; font-weight: 700; color: #2aacb8; font-variant-numeric: tabular-nums">
-    {{ progress() }}%
-  </div>
-  <div style="font-size: 11px; color: #64748b">Page {{ done() }} of {{ total() }}</div>
+  <div class="loading-screen__pct">{{ progress() }}%</div>
+  <div class="loading-screen__meta">Page {{ done() }} of {{ total() }}</div>
 </div>

@@ -10,6 +10,7 @@ import {
 } from '@angular/core';
 
 import { SafeHtmlPipe } from './safe-html.pipe';
+import { DEFAULT_TABLE_CELL_HTML } from './rich-text.utils';
 
 @Component({
   selector: 'td[appTableCell]',
@@ -18,6 +19,9 @@ import { SafeHtmlPipe } from './safe-html.pipe';
   templateUrl: './table-cell-editor.component.html',
 })
 export class TableCellEditorComponent {
+  /** Exposed for template when read-only. */
+  readonly defaultCellHtml = DEFAULT_TABLE_CELL_HTML;
+
   readonly row = input(0);
   readonly col = input(0);
   readonly html = input<string>('');
@@ -43,7 +47,7 @@ export class TableCellEditorComponent {
     return {
       border: '1px solid #cbd5e1',
       padding: '6px',
-      'font-size': '11px',
+      'font-size': '12px',
       color: this.readOnly() ? '#334155' : '#0f172a',
       background: '#ffffff',
       'vertical-align': 'top',
@@ -60,7 +64,7 @@ export class TableCellEditorComponent {
       if (this.readOnly()) return;
       const el = this.host.nativeElement;
       if (document.activeElement === el) return;
-      const next = h || '\u200b';
+      const next = h && h.trim() !== '' ? h : DEFAULT_TABLE_CELL_HTML;
       if (el.innerHTML !== next) el.innerHTML = next;
     });
   }

@@ -19,10 +19,7 @@ export class PlacedTableGridComponent {
   readonly cellFocus = output<void>();
 
   matrix(): string[][] {
-    const r = this.rows();
-    const c = this.cols();
-    const prev = this.cells();
-    return prev && prev.length === r && prev[0]?.length === c ? prev : ensureTableCells(r, c, prev);
+    return ensureTableCells(this.rows(), this.cols(), this.cells());
   }
 
   onCell(i: number, j: number, h: string): void {
