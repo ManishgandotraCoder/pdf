@@ -9,6 +9,8 @@ import {
   DestroyRef,
   inject,
 } from '@angular/core';
+import { ActivatedRoute, Router } from '@angular/router';
+import { firstValueFrom } from 'rxjs';
 import { ImageCropModalComponent } from './image-crop-modal.component';
 import { RichTextToolbarComponent } from './rich-text-toolbar.component';
 import { InlineEditorComponent } from './inline-editor.component';
@@ -58,6 +60,7 @@ import {
 } from './pdf-design.helpers';
 import { extractPage } from './pdf-extract-page';
 import { ensureTableCells, isProbablyHtml } from './rich-text.utils';
+import { PdfsApiService } from './pdfs-api.service';
 
 @Component({
   selector: 'app-pdf-design-extractor',
@@ -77,6 +80,10 @@ import { ensureTableCells, isProbablyHtml } from './rich-text.utils';
 })
 export class PdfDesignExtractorComponent {
   private readonly destroyRef = inject(DestroyRef);
+  private readonly route = inject(ActivatedRoute);
+  private readonly router = inject(Router);
+  private readonly pdfsApi = inject(PdfsApiService);
+  private openedPdfId: string | null = null;
 
   readonly pages = signal<PageData[]>([]);
   readonly loading = signal(false);
@@ -105,6 +112,8 @@ export class PdfDesignExtractorComponent {
   /** Tracks whether each placed video is currently playing (for play/stop toggle UI). */
   readonly addedVideoPlaying = signal<Record<string, boolean>>({});
 
+  readonly pdfTitle = signal<string>('');
+
   readonly canvasRef = viewChild<ElementRef<HTMLCanvasElement>>('canvas');
   readonly pageStageRef = viewChild<ElementRef<HTMLDivElement>>('pageStage');
   readonly addImageInputRef = viewChild<ElementRef<HTMLInputElement>>('addImageInput');
@@ -126,6 +135,10 @@ export class PdfDesignExtractorComponent {
   });
 
   constructor() {
+    // If we were routed from the PDFs list, auto-load that PDF.
+    const pdfId = this.route.snapshot.paramMap.get('pdfId');
+    if (pdfId) void this.openPdfById(pdfId);
+
     this.destroyRef.onDestroy(() => {
       (Object.values(this.addedVideos()) as VideoElement[][]).forEach((arr: VideoElement[]) =>
         arr.forEach((v: VideoElement) => {
@@ -440,45 +453,146 @@ export class PdfDesignExtractorComponent {
     this.historyUi.update((u) => u + 1);
     try {
       const buf = await file.arrayBuffer();
-      const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
-      const n = pdf.numPages;
-      this.totalPgs.set(n);
-      const all: PageData[] = [];
-      for (let i = 1; i <= n; i++) {
-        const pg = await pdf.getPage(i);
-        const data = await extractPage(pg, i);
-        all.push(data);
-        this.doneCount.set(i);
-        this.progress.set(Math.round((i / n) * 100));
-        this.pages.set([...all]);
-      }
-      const clusters = clusterTemplates(all);
-      all.forEach((pd) => {
-        const c = clusters.find((cl) => cl.pageNums.includes(pd.pageNum));
-        if (c) pd.templateId = c.id;
-      });
-      this.templates.set(clusters);
-      this.pages.set([...all]);
-      const ac = new Set<string>();
-      const af = new Set<string>();
-      const asz = new Set<number>();
-      all.forEach((pd) => {
-        pd.docColors.forEach((c) => ac.add(c));
-        pd.textElements.forEach((e) => {
-          if (e.style.fontFamily && e.style.fontFamily !== 'Unknown') af.add(e.style.fontFamily);
-          if (e.style.fontSize > 0) asz.add(e.style.fontSize);
-        });
-      });
-      this.tokens.set({
-        colors: [...ac].filter((c) => !c.includes('NaN')).slice(0, 40),
-        fonts: [...af].slice(0, 12),
-        sizes: [...asz].sort((a, b) => a - b).slice(0, 20),
-      });
+      this.openedPdfId = null;
+      await this.loadPdfFromBuffer(buf);
     } catch (err: unknown) {
       console.error(err);
       alert('Error: ' + (err instanceof Error ? err.message : String(err)));
     }
     this.loading.set(false);
+  }
+
+  private async openPdfById(pdfId: string): Promise<void> {
+    this.openedPdfId = pdfId;
+    this.loading.set(true);
+    this.progress.set(0);
+    this.doneCount.set(0);
+    this.pages.set([]);
+    try {
+      try {
+        const meta = await firstValueFrom(this.pdfsApi.getPdfMeta(pdfId));
+        if (meta?.pdf?.title) this.pdfTitle.set(meta.pdf.title);
+      } catch { /* title is optional */ }
+      const buf = await firstValueFrom(this.pdfsApi.getPdfFile(pdfId));
+      await this.loadPdfFromBuffer(buf);
+      await this.applySavedStateForPdf(pdfId);
+    } catch (err: unknown) {
+      console.error(err);
+      alert('Error loading PDF: ' + (err instanceof Error ? err.message : String(err)));
+    } finally {
+      this.loading.set(false);
+    }
+  }
+
+  private async loadPdfFromBuffer(buf: ArrayBuffer): Promise<void> {
+    const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+    const n = pdf.numPages;
+    this.totalPgs.set(n);
+    const all: PageData[] = [];
+    for (let i = 1; i <= n; i++) {
+      const pg = await pdf.getPage(i);
+      const data = await extractPage(pg, i);
+      all.push(data);
+      this.doneCount.set(i);
+      this.progress.set(Math.round((i / n) * 100));
+      this.pages.set([...all]);
+    }
+    const clusters = clusterTemplates(all);
+    all.forEach((pd) => {
+      const c = clusters.find((cl) => cl.pageNums.includes(pd.pageNum));
+      if (c) pd.templateId = c.id;
+    });
+    this.templates.set(clusters);
+    this.pages.set([...all]);
+    const ac = new Set<string>();
+    const af = new Set<string>();
+    const asz = new Set<number>();
+    all.forEach((pd) => {
+      pd.docColors.forEach((c) => ac.add(c));
+      pd.textElements.forEach((e) => {
+        if (e.style.fontFamily && e.style.fontFamily !== 'Unknown') af.add(e.style.fontFamily);
+        if (e.style.fontSize > 0) asz.add(e.style.fontSize);
+      });
+    });
+    this.tokens.set({
+      colors: [...ac].filter((c) => !c.includes('NaN')).slice(0, 40),
+      fonts: [...af].slice(0, 12),
+      sizes: [...asz].sort((a, b) => a - b).slice(0, 20),
+    });
+  }
+
+  private async applySavedStateForPdf(pdfId: string): Promise<void> {
+    try {
+      const res = await firstValueFrom(this.pdfsApi.getPdfState(pdfId));
+      const payload = res?.state?.state;
+      if (!payload || typeof payload !== 'object') return;
+      const s = payload as Partial<{
+        tokens: DesignTokens;
+        edits: EditsMap;
+        imageEdits: ImageEditsMap;
+        layoutEdits: LayoutEditsMap;
+        addedImages: AddedImagesMap;
+        addedVideos: AddedVideosMap;
+        addedTables: AddedTablesMap;
+        addedRichTexts: AddedRichTextsMap;
+        selPage: number;
+        zoom: number;
+        editorMode: 'edit' | 'view';
+        activeAddTool: 'image' | 'video' | 'table' | 'userText' | null;
+      }>;
+
+      if (s.tokens) this.tokens.set(s.tokens);
+      if (s.edits) this.edits.set(s.edits);
+      if (s.imageEdits) this.imageEdits.set(s.imageEdits);
+      if (s.layoutEdits) this.layoutEdits.set(s.layoutEdits);
+      if (s.addedImages) this.addedImages.set(s.addedImages);
+      if (s.addedVideos) this.addedVideos.set(s.addedVideos);
+      if (s.addedTables) this.addedTables.set(s.addedTables);
+      if (s.addedRichTexts) this.addedRichTexts.set(s.addedRichTexts);
+      if (typeof s.zoom === 'number') this.zoom.set(s.zoom);
+      if (s.editorMode === 'view' || s.editorMode === 'edit') this.editorMode.set(s.editorMode);
+      if (
+        s.activeAddTool === null ||
+        s.activeAddTool === 'image' ||
+        s.activeAddTool === 'video' ||
+        s.activeAddTool === 'table' ||
+        s.activeAddTool === 'userText'
+      ) {
+        this.activeAddTool.set(s.activeAddTool);
+      }
+      if (typeof s.selPage === 'number') {
+        const maxIdx = Math.max(0, this.pages().length - 1);
+        this.selPage.set(Math.min(Math.max(0, s.selPage), maxIdx));
+      }
+    } catch (err: unknown) {
+      console.error(err);
+    }
+  }
+
+  private currentPdfEditorState(): unknown {
+    return {
+      tokens: structuredClone(this.tokens()),
+      edits: structuredClone(this.edits()),
+      imageEdits: structuredClone(this.imageEdits()),
+      layoutEdits: structuredClone(this.layoutEdits()),
+      addedImages: structuredClone(this.addedImages()),
+      addedVideos: structuredClone(this.addedVideos()),
+      addedTables: structuredClone(this.addedTables()),
+      addedRichTexts: structuredClone(this.addedRichTexts()),
+      selPage: this.selPage(),
+      zoom: this.zoom(),
+      editorMode: this.editorMode(),
+      activeAddTool: this.activeAddTool(),
+    };
+  }
+
+  async saveEdits(): Promise<void> {
+    if (!this.openedPdfId) {
+      alert('Saved (local).');
+      return;
+    }
+    await firstValueFrom(this.pdfsApi.putPdfState(this.openedPdfId, this.currentPdfEditorState()));
+    alert('Saved. Re-opening this PDF will show your edits.');
   }
 
   patchImageEdit(
@@ -1608,6 +1722,10 @@ export class PdfDesignExtractorComponent {
       }
     }
     return out;
+  }
+
+  goBackToList(): void {
+    void this.router.navigate(['/']);
   }
 
   goToEditSummary(e: { pgData: PageData | undefined; elId: string }): void {

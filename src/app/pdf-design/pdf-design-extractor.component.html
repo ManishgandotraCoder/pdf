@@ -111,6 +111,31 @@
     <!-- CENTER -->
     <div class="workspace-main">
       <div class="topbar">
+        <!-- Back to list -->
+        <button
+          type="button"
+          (click)="goBackToList()"
+          style="
+            display: flex; align-items: center; gap: 6px;
+            padding: 6px 12px; border-radius: 8px;
+            border: 1px solid rgba(15,23,42,0.1);
+            background: #f8fafc; color: #475569;
+            font-size: 12px; font-weight: 600; cursor: pointer;
+            transition: background 0.12s, border-color 0.12s;
+          "
+          title="Back to PDF list"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <path d="M19 12H5M12 5l-7 7 7 7"/>
+          </svg>
+          PDFs
+        </button>
+        @if (pdfTitle()) {
+          <div style="font-size: 13px; font-weight: 700; color: #0f172a; max-width: 200px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;" [title]="pdfTitle()">
+            {{ pdfTitle() }}
+          </div>
+        }
+        <div class="topbar__divider"></div>
         @if (totalEdits() + totalImageMods() > 0) {
           <span class="badge-edits">
             @if (totalEdits() > 0) {
@@ -176,6 +201,23 @@
           "
         >
           New
+        </button>
+        <button
+          type="button"
+          (click)="saveEdits()"
+          style="
+            padding: 5px 9px;
+            background: rgba(15, 118, 110, 0.08);
+            color: #0f766e;
+            border: 1px solid rgba(15, 118, 110, 0.25);
+            border-radius: 5px;
+            font-size: 11px;
+            cursor: pointer;
+            font-weight: 800;
+          "
+          title="Save (also updates PDFs list timestamp)"
+        >
+          Save
         </button>
       </div>
 

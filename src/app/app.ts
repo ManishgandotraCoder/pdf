@@ -1,10 +1,9 @@
 import { Component } from '@angular/core';
-
-import { PdfDesignExtractorComponent } from './pdf-design/pdf-design-extractor.component';
+import { RouterOutlet } from '@angular/router';
 
 @Component({
   selector: 'app-root',
-  imports: [PdfDesignExtractorComponent],
-  template: '<app-pdf-design-extractor />',
+  imports: [RouterOutlet],
+  template: `<router-outlet />`,
 })
 export class App {}
