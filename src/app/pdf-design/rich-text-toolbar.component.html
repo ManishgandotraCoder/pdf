@@ -1,179 +1,250 @@
 <div data-rich-toolbar class="rich-text-toolbar-wrap">
-  <select
-    title="Font"
-    [disabled]="disabled()"
-    (change)="onFontChange($event)"
-    style="max-width: 140px"
-  >
-    <option value="" disabled selected>Font…</option>
-    @for (f of fonts(); track f) {
-      <option [value]="f">{{ f }}</option>
-    }
-  </select>
-  <select
-    title="Font size"
-    [disabled]="disabled()"
-    (change)="onSizeChange($event)"
-    style="width: 72px"
-  >
-    <option value="" disabled selected>Size</option>
-    @for (sz of sizes; track sz) {
-      <option [value]="'' + sz">{{ sz }}px</option>
-    }
-  </select>
-  <button
-    type="button"
-    class="rt-btn rt-btn--bi"
-    title="Bold"
-    [disabled]="disabled()"
-    (mousedown)="$event.preventDefault()"
-    (click)="$event.preventDefault(); exec('bold')"
-  >
-    B
-  </button>
-  <button
-    type="button"
-    class="rt-btn rt-btn--italic"
-    title="Italic"
-    [disabled]="disabled()"
-    (mousedown)="$event.preventDefault()"
-    (click)="$event.preventDefault(); exec('italic')"
-  >
-    I
-  </button>
-  <button
-    type="button"
-    class="rt-btn rt-btn--underline"
-    title="Underline"
-    [disabled]="disabled()"
-    (mousedown)="$event.preventDefault()"
-    (click)="$event.preventDefault(); exec('underline')"
-  >
-    U
-  </button>
-  <label style="font-size: 10px; color: #64748b; display: flex; align-items: center; gap: 4px">
-    Text
-    <input
-      type="color"
+  <fieldset class="rt-toolbar__group">
+    <legend class="rt-toolbar__legend">Font</legend>
+    <select
+      class="rt-select"
+      title="Font"
+      [disabled]="disabled()"
+      (change)="onFontChange($event)"
+    >
+      <option value="" disabled selected>Font…</option>
+      @for (f of fonts(); track f) {
+        <option [value]="f">{{ f }}</option>
+      }
+    </select>
+    <select
+      class="rt-select rt-select--narrow"
+      title="Font size"
+      [disabled]="disabled()"
+      (change)="onSizeChange($event)"
+    >
+      <option value="" disabled selected>Size</option>
+      @for (sz of sizes; track sz) {
+        <option [value]="'' + sz">{{ sz }}px</option>
+      }
+    </select>
+  </fieldset>
+
+  <fieldset class="rt-toolbar__group">
+    <legend class="rt-toolbar__legend">Text style</legend>
+    <button
+      type="button"
+      class="rt-btn rt-btn--bi"
+      title="Bold"
       [disabled]="disabled()"
       (mousedown)="$event.preventDefault()"
-      (change)="onForeColor($event)"
-      style="width: 28px; height: 24px; padding: 0; border: 1px solid #cbd5e1; border-radius: 6px; cursor: pointer"
-      [style.cursor]="disabled() ? 'not-allowed' : 'pointer'"
-    />
-  </label>
-  <label style="font-size: 10px; color: #64748b; display: flex; align-items: center; gap: 4px">
-    BG
-    <input
-      type="color"
-      title="Background"
+      (click)="$event.preventDefault(); exec('bold')"
+    >
+      B
+    </button>
+    <button
+      type="button"
+      class="rt-btn rt-btn--italic"
+      title="Italic"
       [disabled]="disabled()"
       (mousedown)="$event.preventDefault()"
-      (change)="onBackColor($event)"
-      style="width: 28px; height: 24px; padding: 0; border: 1px solid #cbd5e1; border-radius: 6px; cursor: pointer"
-      [style.cursor]="disabled() ? 'not-allowed' : 'pointer'"
-    />
-  </label>
-  <label style="font-size: 10px; color: #64748b; display: flex; align-items: center; gap: 4px">
-    Hi
-    <input
-      type="color"
-      title="Highlight"
+      (click)="$event.preventDefault(); exec('italic')"
+    >
+      I
+    </button>
+    <button
+      type="button"
+      class="rt-btn rt-btn--underline"
+      title="Underline"
       [disabled]="disabled()"
       (mousedown)="$event.preventDefault()"
-      (change)="onHilite($event)"
-      style="width: 28px; height: 24px; padding: 0; border: 1px solid #cbd5e1; border-radius: 6px; cursor: pointer"
-      [style.cursor]="disabled() ? 'not-allowed' : 'pointer'"
-    />
-  </label>
-  <button
-    type="button"
-    class="rt-btn"
-    title="Insert link"
-    [disabled]="disabled()"
-    (mousedown)="$event.preventDefault()"
-    (click)="$event.preventDefault(); link()"
-  >
-    Link
-  </button>
-  <button
-    type="button"
-    class="rt-btn"
-    title="Align left"
-    [disabled]="disabled()"
-    (mousedown)="$event.preventDefault()"
-    (click)="$event.preventDefault(); exec('justifyLeft')"
-  >
-    ◧
-  </button>
-  <button
-    type="button"
-    class="rt-btn"
-    title="Align center"
-    [disabled]="disabled()"
-    (mousedown)="$event.preventDefault()"
-    (click)="$event.preventDefault(); exec('justifyCenter')"
-  >
-    ≡
-  </button>
-  <button
-    type="button"
-    class="rt-btn"
-    title="Align right"
-    [disabled]="disabled()"
-    (mousedown)="$event.preventDefault()"
-    (click)="$event.preventDefault(); exec('justifyRight')"
-  >
-    ◨
-  </button>
-  <button
-    type="button"
-    class="rt-btn"
-    title="Justify"
-    [disabled]="disabled()"
-    (mousedown)="$event.preventDefault()"
-    (click)="$event.preventDefault(); exec('justifyFull')"
-  >
-    ⊞
-  </button>
-  <button
-    type="button"
-    class="rt-btn"
-    title="Outdent"
-    [disabled]="disabled()"
-    (mousedown)="$event.preventDefault()"
-    (click)="$event.preventDefault(); exec('outdent')"
-  >
-    ⊢
-  </button>
-  <button
-    type="button"
-    class="rt-btn"
-    title="Indent"
-    [disabled]="disabled()"
-    (mousedown)="$event.preventDefault()"
-    (click)="$event.preventDefault(); exec('indent')"
-  >
-    ⊣
-  </button>
-  <button
-    type="button"
-    class="rt-btn"
-    title="Bullet list"
-    [disabled]="disabled()"
-    (mousedown)="$event.preventDefault()"
-    (click)="$event.preventDefault(); exec('insertUnorderedList')"
-  >
-    •
-  </button>
-  <button
-    type="button"
-    class="rt-btn"
-    title="Numbered list"
-    [disabled]="disabled()"
-    (mousedown)="$event.preventDefault()"
-    (click)="$event.preventDefault(); exec('insertOrderedList')"
-  >
-    1.
-  </button>
+      (click)="$event.preventDefault(); exec('underline')"
+    >
+      U
+    </button>
+  </fieldset>
+
+  <fieldset class="rt-toolbar__group">
+    <legend class="rt-toolbar__legend">Colors</legend>
+    <label class="rt-swatch-label">
+      <span class="rt-swatch-label__text">A</span>
+      <input
+        type="color"
+        class="rt-color-input"
+        title="Text color"
+        [disabled]="disabled()"
+        (mousedown)="$event.preventDefault()"
+        (change)="onForeColor($event)"
+        [style.cursor]="disabled() ? 'not-allowed' : 'pointer'"
+      />
+    </label>
+    <label class="rt-swatch-label">
+      <span class="rt-swatch-label__text">Bg</span>
+      <input
+        type="color"
+        class="rt-color-input"
+        title="Background"
+        [disabled]="disabled()"
+        (mousedown)="$event.preventDefault()"
+        (change)="onBackColor($event)"
+        [style.cursor]="disabled() ? 'not-allowed' : 'pointer'"
+      />
+    </label>
+    <label class="rt-swatch-label">
+      <span class="rt-swatch-label__text">Hi</span>
+      <input
+        type="color"
+        class="rt-color-input"
+        title="Highlight"
+        [disabled]="disabled()"
+        (mousedown)="$event.preventDefault()"
+        (change)="onHilite($event)"
+        [style.cursor]="disabled() ? 'not-allowed' : 'pointer'"
+      />
+    </label>
+  </fieldset>
+
+  <fieldset class="rt-toolbar__group">
+    <legend class="rt-toolbar__legend">Insert</legend>
+    <button
+      type="button"
+      class="rt-btn rt-btn--with-icon"
+      title="Insert link"
+      [disabled]="disabled()"
+      (mousedown)="$event.preventDefault()"
+      (click)="$event.preventDefault(); link()"
+    >
+      <svg class="rt-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+        <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+        <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+      </svg>
+      <span>Link</span>
+    </button>
+  </fieldset>
+
+  <fieldset class="rt-toolbar__group">
+    <legend class="rt-toolbar__legend">Alignment</legend>
+    <button
+      type="button"
+      class="rt-btn rt-btn--icon"
+      title="Align left"
+      [disabled]="disabled()"
+      (mousedown)="$event.preventDefault()"
+      (click)="$event.preventDefault(); exec('justifyLeft')"
+    >
+      <svg class="rt-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+        <line x1="4" y1="6" x2="20" y2="6" />
+        <line x1="4" y1="12" x2="14" y2="12" />
+        <line x1="4" y1="18" x2="20" y2="18" />
+      </svg>
+    </button>
+    <button
+      type="button"
+      class="rt-btn rt-btn--icon"
+      title="Align center"
+      [disabled]="disabled()"
+      (mousedown)="$event.preventDefault()"
+      (click)="$event.preventDefault(); exec('justifyCenter')"
+    >
+      <svg class="rt-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+        <line x1="4" y1="6" x2="20" y2="6" />
+        <line x1="7" y1="12" x2="17" y2="12" />
+        <line x1="4" y1="18" x2="20" y2="18" />
+      </svg>
+    </button>
+    <button
+      type="button"
+      class="rt-btn rt-btn--icon"
+      title="Align right"
+      [disabled]="disabled()"
+      (mousedown)="$event.preventDefault()"
+      (click)="$event.preventDefault(); exec('justifyRight')"
+    >
+      <svg class="rt-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+        <line x1="4" y1="6" x2="20" y2="6" />
+        <line x1="10" y1="12" x2="20" y2="12" />
+        <line x1="4" y1="18" x2="20" y2="18" />
+      </svg>
+    </button>
+    <button
+      type="button"
+      class="rt-btn rt-btn--icon"
+      title="Justify"
+      [disabled]="disabled()"
+      (mousedown)="$event.preventDefault()"
+      (click)="$event.preventDefault(); exec('justifyFull')"
+    >
+      <svg class="rt-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+        <line x1="4" y1="6" x2="20" y2="6" />
+        <line x1="4" y1="12" x2="20" y2="12" />
+        <line x1="4" y1="18" x2="20" y2="18" />
+      </svg>
+    </button>
+  </fieldset>
+
+  <fieldset class="rt-toolbar__group">
+    <legend class="rt-toolbar__legend">Indent</legend>
+    <button
+      type="button"
+      class="rt-btn rt-btn--icon"
+      title="Outdent"
+      [disabled]="disabled()"
+      (mousedown)="$event.preventDefault()"
+      (click)="$event.preventDefault(); exec('outdent')"
+    >
+      <svg class="rt-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <line x1="9" y1="6" x2="20" y2="6" />
+        <line x1="5" y1="12" x2="20" y2="12" />
+        <line x1="9" y1="18" x2="20" y2="18" />
+        <polyline points="3 8 7 12 3 16" />
+      </svg>
+    </button>
+    <button
+      type="button"
+      class="rt-btn rt-btn--icon"
+      title="Indent"
+      [disabled]="disabled()"
+      (mousedown)="$event.preventDefault()"
+      (click)="$event.preventDefault(); exec('indent')"
+    >
+      <svg class="rt-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <line x1="4" y1="6" x2="15" y2="6" />
+        <line x1="9" y1="12" x2="20" y2="12" />
+        <line x1="4" y1="18" x2="15" y2="18" />
+        <polyline points="21 8 17 12 21 16" />
+      </svg>
+    </button>
+  </fieldset>
+
+  <fieldset class="rt-toolbar__group">
+    <legend class="rt-toolbar__legend">Lists</legend>
+    <button
+      type="button"
+      class="rt-btn rt-btn--icon"
+      title="Bullet list"
+      [disabled]="disabled()"
+      (mousedown)="$event.preventDefault()"
+      (click)="$event.preventDefault(); exec('insertUnorderedList')"
+    >
+      <svg class="rt-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+        <line x1="9" y1="6" x2="20" y2="6" />
+        <line x1="9" y1="12" x2="20" y2="12" />
+        <line x1="9" y1="18" x2="20" y2="18" />
+        <circle cx="5" cy="6" r="1.25" fill="currentColor" stroke="none" />
+        <circle cx="5" cy="12" r="1.25" fill="currentColor" stroke="none" />
+        <circle cx="5" cy="18" r="1.25" fill="currentColor" stroke="none" />
+      </svg>
+    </button>
+    <button
+      type="button"
+      class="rt-btn rt-btn--icon"
+      title="Numbered list"
+      [disabled]="disabled()"
+      (mousedown)="$event.preventDefault()"
+      (click)="$event.preventDefault(); exec('insertOrderedList')"
+    >
+      <svg class="rt-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <line x1="10" y1="6" x2="20" y2="6" />
+        <line x1="10" y1="12" x2="20" y2="12" />
+        <line x1="10" y1="18" x2="20" y2="18" />
+        <path d="M5 17h2a2 2 0 1 0 0-4H5v8" />
+        <path d="M5 5h2v4H5M4 9h2" />
+      </svg>
+    </button>
+  </fieldset>
 </div>

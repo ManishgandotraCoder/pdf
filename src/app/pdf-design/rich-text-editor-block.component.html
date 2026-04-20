@@ -1,13 +1,15 @@
-<app-rich-text-toolbar [disabled]="disabled()" [fontChoices]="fontChoices()" />
-<div
-  #editable
-  class="rich-text-editor-surface"
-  contenteditable="true"
-  [attr.contenteditable]="disabled() ? 'false' : 'true'"
-  [style.min-height.px]="minHeight()"
-  [style.cursor]="disabled() ? 'default' : 'text'"
-  [style.opacity]="disabled() ? 0.55 : 1"
-  (focus)="onFocus()"
-  (input)="onInput($event)"
-  (blur)="onBlur($event)"
-></div>
+<div class="rich-text-editor-shell">
+  <app-rich-text-toolbar [disabled]="disabled()" [fontChoices]="fontChoices()" />
+  <div
+    #editable
+    class="rich-text-editor-surface"
+    contenteditable="true"
+    [attr.contenteditable]="disabled() ? 'false' : 'true'"
+    [style.min-height.px]="minHeight()"
+    [style.cursor]="disabled() ? 'default' : 'text'"
+    [style.opacity]="disabled() ? 0.55 : 1"
+    (focus)="onFocus()"
+    (input)="onInput($event)"
+    (blur)="onBlur($event)"
+  ></div>
+</div>
