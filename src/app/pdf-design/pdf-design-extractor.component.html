@@ -309,17 +309,13 @@
               @let eb = overlayBounds(el);
               <div
                 class="edited-overlay"
-                style="
-                  position: absolute;
-                  color: #222;
-                  padding: 1px 2px;
-                  z-index: 0;
-                "
+                style="position: absolute; padding: 1px 2px; z-index: 0;"
                 [style.left.px]="eb.x - 2"
                 [style.top.px]="eb.y - 1"
                 [style.width.px]="eb.w + 12"
                 [style.minHeight.px]="eb.h + 4"
                 [style.background]="pgv.bgColor || '#ffffff'"
+                [style.color]="el.style.color || 'inherit'"
                 [style.fontSize.px]="el.style.fontSizePx || eb.h * 0.72"
                 [style.fontFamily]="el.style.fontFamily"
                 [style.fontWeight]="el.style.fontWeight"

@@ -20,6 +20,7 @@ export const DEFAULT_TABLE_CELL_HTML =
   '<p style="font-size:12px;line-height:1.5;margin:0"><br></p>';
 
 let savedRichTextRange: Range | null = null;
+let savedRichTextEditable: HTMLElement | null = null;
 
 /** Call from toolbar mousedown (capture) so selection survives focus moving to the toolbar. */
 export function saveRichTextSelection(): void {
@@ -30,18 +31,56 @@ export function saveRichTextSelection(): void {
     r.commonAncestorContainer.nodeType === Node.ELEMENT_NODE
       ? (r.commonAncestorContainer as Element)
       : r.commonAncestorContainer.parentElement;
-  if (!root?.closest('[contenteditable="true"]')) return;
+  const editable = root?.closest('[contenteditable="true"]') as HTMLElement | null;
+  if (!editable) return;
   savedRichTextRange = r.cloneRange();
+  savedRichTextEditable = editable;
 }
 
 export function restoreRichTextSelection(): void {
-  if (!savedRichTextRange) return;
+  if (!savedRichTextRange && !savedRichTextEditable) return;
+  // If the saved editable is no longer in the document, clear stale state.
+  if (savedRichTextEditable && !savedRichTextEditable.isConnected) {
+    savedRichTextRange = null;
+    savedRichTextEditable = null;
+    return;
+  }
   try {
+    // Re-focus the editable element first so execCommand has a valid target
+    if (savedRichTextEditable) {
+      savedRichTextEditable.focus();
+    }
     const sel = window.getSelection();
-    sel?.removeAllRanges();
-    sel?.addRange(savedRichTextRange);
+    if (savedRichTextRange) {
+      sel?.removeAllRanges();
+      sel?.addRange(savedRichTextRange);
+    }
   } catch {
     savedRichTextRange = null;
+  }
+}
+
+/**
+ * After restoring the selection, if it is still collapsed (cursor only, no text
+ * highlighted) expand it to cover all content in the saved editable element.
+ * This ensures toolbar commands like Bold / font-name always have visible effect.
+ */
+export function expandToAllIfCollapsed(): void {
+  const editable = savedRichTextEditable;
+  if (!editable || !editable.isConnected) return;
+  const sel = window.getSelection();
+  if (!sel) return;
+  const isCollapsed = sel.rangeCount === 0 || sel.getRangeAt(0).collapsed;
+  if (isCollapsed) {
+    try {
+      const range = document.createRange();
+      range.selectNodeContents(editable);
+      sel.removeAllRanges();
+      sel.addRange(range);
+      savedRichTextRange = range.cloneRange();
+    } catch {
+      /* range may be invalid if DOM was just replaced — swallow */
+    }
   }
 }
 
@@ -112,7 +151,8 @@ export function execRich(cmd: string, val?: string): boolean {
  * `styleWithCSS` is false; with styleWithCSS true, `fontSize` often does nothing useful.
  */
 export function applyFontSizePx(px: string | number): void {
-  restoreRichTextSelection();
+  // Caller is responsible for restoreRichTextSelection() + expandToAllIfCollapsed()
+  // before calling this function.
   const n = Number(px);
   if (!Number.isFinite(n) || n < 1) return;
   const doc = document as Document & {
@@ -120,7 +160,8 @@ export function applyFontSizePx(px: string | number): void {
   };
   doc.execCommand('styleWithCSS', false, false);
   doc.execCommand('fontSize', false, '7');
-  const fonts = document.getElementsByTagName('font');
+  const scope = savedRichTextEditable ?? document.body;
+  const fonts = scope.getElementsByTagName('font');
   for (let i = fonts.length - 1; i >= 0; i--) {
     const el = fonts[i];
     if (el.size === '7') {

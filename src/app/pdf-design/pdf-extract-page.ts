@@ -7,6 +7,7 @@ import {
   concatTransform,
   isWhiteish,
   layoutSignature,
+  sampleTextColor,
   toHex,
 } from './pdf-design.helpers';
 
@@ -162,13 +163,18 @@ export async function extractPage(page: PDFPageProxy, pageNum: number): Promise<
     const info = (styles as Record<string, { fontFamily?: string }>)[ti.fontName] || {};
     const raw = info.fontFamily || 'sans-serif';
     const fontFamily = raw.replace(/,.*$/, '').trim();
+    const elX = sx;
+    const elY = sy - fontSize;
+    const elW = Math.max(ti.width * SCALE, 4);
+    const elH = Math.max(fontSize * 1.3, 8);
+    const color = sampleTextColor(ctx, { x: elX, y: elY, w: elW, h: elH }, bgColor, W, H);
     textElements.push({
       id: `t_${pageNum}_${idx}`,
       type: 'text',
-      x: sx,
-      y: sy - fontSize,
-      w: Math.max(ti.width * SCALE, 4),
-      h: Math.max(fontSize * 1.3, 8),
+      x: elX,
+      y: elY,
+      w: elW,
+      h: elH,
       content: ti.str,
       style: {
         fontFamily,
@@ -176,6 +182,7 @@ export async function extractPage(page: PDFPageProxy, pageNum: number): Promise<
         fontSizePx: fontSize,
         fontWeight: /bold/i.test(raw) || /bold/i.test(ti.fontName) ? 'bold' : 'normal',
         fontStyle: /italic|oblique/i.test(raw) || /italic|oblique/i.test(ti.fontName) ? 'italic' : 'normal',
+        color,
       },
     });
   });

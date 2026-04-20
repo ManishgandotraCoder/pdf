@@ -6,6 +6,8 @@ export interface TextStyle {
   fontSizePx?: number;
   fontWeight: string;
   fontStyle: string;
+  /** Hex colour sampled from the rendered PDF canvas, e.g. "#1a3c6e". Empty string = unknown. */
+  color: string;
 }
 
 export interface TextElement {

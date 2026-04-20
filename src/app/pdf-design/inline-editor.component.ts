@@ -38,6 +38,19 @@ export class InlineEditorComponent implements AfterViewInit {
     if (isProbablyHtml(raw)) r.innerHTML = raw;
     else r.textContent = raw;
     r.focus();
+    // Select all content so the user can immediately replace or refine the selection
+    // (paragraph / line selection is then one Shift+End / Shift+Home away)
+    try {
+      const sel = window.getSelection();
+      if (sel) {
+        const range = document.createRange();
+        range.selectNodeContents(r);
+        sel.removeAllRanges();
+        sel.addRange(range);
+      }
+    } catch {
+      /* selection not critical — swallow */
+    }
   }
 
   commit(): void {

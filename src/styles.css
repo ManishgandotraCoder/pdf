@@ -457,6 +457,7 @@ select:focus-visible {
 }
 
 /* Inline edit textarea (canvas) */
+/* NOTE: text colour is NOT set here — it is bound via [style.color] from el.style.color */
 .edit-textarea {
   position: absolute;
   background: rgba(255, 255, 255, 0.98);
@@ -468,7 +469,6 @@ select:focus-visible {
   padding: 2px 4px;
   margin: 0;
   line-height: 1.2;
-  color: #111;
   z-index: 20;
   cursor: text;
   word-break: break-word;

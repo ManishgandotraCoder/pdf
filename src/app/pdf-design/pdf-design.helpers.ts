@@ -33,6 +33,67 @@ export function isWhiteish(hex: string | null | undefined): boolean {
   return h === 'ffffff' || h === 'fff' || h.includes('NaN');
 }
 
+/**
+ * Parse a CSS hex colour string like "#rrggbb" into {r,g,b} or null.
+ */
+export function hexToRgb(hex: string): { r: number; g: number; b: number } | null {
+  const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  if (!m) return null;
+  return { r: parseInt(m[1], 16), g: parseInt(m[2], 16), b: parseInt(m[3], 16) };
+}
+
+/**
+ * Sample the rendered canvas to find the dominant foreground colour in the area
+ * covered by a text element.  Returns a hex string, or '' if undetermined.
+ *
+ * Strategy: scan a grid of pixels across the text bounding box; for each pixel
+ * compute its luminance-distance from the page background; pick the pixel that
+ * deviates most from the background – that is most likely to be text ink.
+ */
+export function sampleTextColor(
+  ctx: CanvasRenderingContext2D,
+  el: { x: number; y: number; w: number; h: number },
+  bgHex: string,
+  canvasW: number,
+  canvasH: number,
+): string {
+  const bg = hexToRgb(bgHex) ?? { r: 255, g: 255, b: 255 };
+
+  // Clamp sample region to canvas bounds, leave a 1 px inset
+  const sx = Math.max(1, Math.floor(el.x + 1));
+  const sy = Math.max(1, Math.floor(el.y + 1));
+  const ex = Math.min(canvasW - 1, Math.floor(el.x + el.w - 1));
+  const ey = Math.min(canvasH - 1, Math.floor(el.y + el.h - 1));
+
+  if (sx >= ex || sy >= ey) return '';
+
+  // Take at most an 18×5 grid of sample points
+  const cols = Math.min(ex - sx, 18);
+  const rows = Math.min(ey - sy, 5);
+  const stepX = (ex - sx) / (cols + 1);
+  const stepY = (ey - sy) / (rows + 1);
+
+  let bestDist = 0;
+  let bestHex = '';
+
+  for (let row = 1; row <= rows; row++) {
+    for (let col = 1; col <= cols; col++) {
+      const px = Math.round(sx + col * stepX);
+      const py = Math.round(sy + row * stepY);
+      const d = ctx.getImageData(px, py, 1, 1).data;
+      const dist =
+        Math.abs(d[0] - bg.r) + Math.abs(d[1] - bg.g) + Math.abs(d[2] - bg.b);
+      if (dist > bestDist) {
+        bestDist = dist;
+        bestHex = toHex(d[0], d[1], d[2]);
+      }
+    }
+  }
+
+  // If difference is negligible the pixel is background — return empty (unknown)
+  return bestDist > 30 ? bestHex : '';
+}
+
 export function concatTransform(a: number[], b: number[]): number[] {
   return [
     a[0] * b[0] + a[2] * b[1],

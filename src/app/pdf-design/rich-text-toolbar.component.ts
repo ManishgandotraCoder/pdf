@@ -3,6 +3,7 @@ import { Component, ElementRef, inject, input } from '@angular/core';
 import {
   applyFontSizePx,
   execRich,
+  expandToAllIfCollapsed,
   FONT_SIZE_PX_LIST,
   mergeFontOptions,
   promptLinkUrl,
@@ -39,6 +40,7 @@ export class RichTextToolbarComponent {
     const sel = e.target as HTMLSelectElement;
     const v = sel.value;
     restoreRichTextSelection();
+    expandToAllIfCollapsed();
     execRich('fontName', v);
     sel.selectedIndex = 0;
   }
@@ -46,7 +48,11 @@ export class RichTextToolbarComponent {
   onSizeChange(e: Event): void {
     const sel = e.target as HTMLSelectElement;
     const v = sel.value;
-    if (v) applyFontSizePx(v);
+    if (v) {
+      restoreRichTextSelection();
+      expandToAllIfCollapsed();
+      applyFontSizePx(v);
+    }
     sel.selectedIndex = 0;
   }
 
@@ -63,24 +69,28 @@ export class RichTextToolbarComponent {
   exec(cmd: string, val?: string): void {
     if (this.disabled()) return;
     restoreRichTextSelection();
+    expandToAllIfCollapsed();
     execRich(cmd, val);
   }
 
   onForeColor(e: Event): void {
     if (this.disabled()) return;
     restoreRichTextSelection();
+    expandToAllIfCollapsed();
     execRich('foreColor', (e.target as HTMLInputElement).value);
   }
 
   onBackColor(e: Event): void {
     if (this.disabled()) return;
     restoreRichTextSelection();
+    expandToAllIfCollapsed();
     execRich('backColor', (e.target as HTMLInputElement).value);
   }
 
   onHilite(e: Event): void {
     if (this.disabled()) return;
     restoreRichTextSelection();
+    expandToAllIfCollapsed();
     const v = (e.target as HTMLInputElement).value;
     if (!execRich('hiliteColor', v)) execRich('backColor', v);
   }
