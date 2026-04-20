@@ -4,6 +4,7 @@ import type {
   ImageEditsMap,
   ImageElement,
   PageData,
+  ResizeHandleId,
   TemplateCluster,
   VideoElement,
 } from './pdf-design.models';
@@ -275,7 +276,7 @@ export function drawImageFit(
   });
 }
 
-/** Display rect for overlay / hit-test (PDF images may have x,y overrides in imageEdits). */
+/** Display rect for overlay / hit-test (PDF images may have x,y/w/h overrides in imageEdits). */
 export function getImageOverlayBounds(
   el: ImageElement,
   pn: number,
@@ -284,7 +285,92 @@ export function getImageOverlayBounds(
   if (el.type !== 'image') return { x: el.x, y: el.y, w: el.w, h: el.h };
   if (el._userAdded) return { x: el.x, y: el.y, w: el.w, h: el.h };
   const ed = imageEdits[pn]?.[el.id];
-  return { x: ed?.x ?? el.x, y: ed?.y ?? el.y, w: el.w, h: el.h };
+  return {
+    x: ed?.x ?? el.x,
+    y: ed?.y ?? el.y,
+    w: ed?.w ?? el.w,
+    h: ed?.h ?? el.h,
+  };
+}
+
+const MIN_PLACE = { w: 32, h: 24 } as const;
+
+/** Resize a box by dragging a handle; pointer (px, py) is in page coordinates. */
+export function rectFromResizeHandle(
+  handle: ResizeHandleId,
+  sr: { x: number; y: number; w: number; h: number },
+  px: number,
+  py: number,
+  pw: number,
+  ph: number,
+  minW = MIN_PLACE.w,
+  minH = MIN_PLACE.h,
+): { x: number; y: number; w: number; h: number } {
+  const right = sr.x + sr.w;
+  const bottom = sr.y + sr.h;
+  let x = sr.x;
+  let y = sr.y;
+  let w = sr.w;
+  let h = sr.h;
+
+  switch (handle) {
+    case 'e': {
+      w = Math.max(minW, Math.min(px, pw) - sr.x);
+      break;
+    }
+    case 's': {
+      h = Math.max(minH, Math.min(py, ph) - sr.y);
+      break;
+    }
+    case 'w': {
+      const nx = Math.min(Math.max(0, px), right - minW);
+      w = right - nx;
+      x = nx;
+      break;
+    }
+    case 'n': {
+      const ny = Math.min(Math.max(0, py), bottom - minH);
+      h = bottom - ny;
+      y = ny;
+      break;
+    }
+    case 'se': {
+      w = Math.max(minW, Math.min(px, pw) - sr.x);
+      h = Math.max(minH, Math.min(py, ph) - sr.y);
+      break;
+    }
+    case 'sw': {
+      const nx = Math.min(Math.max(0, px), right - minW);
+      w = right - nx;
+      x = nx;
+      h = Math.max(minH, Math.min(py, ph) - sr.y);
+      break;
+    }
+    case 'ne': {
+      w = Math.max(minW, Math.min(px, pw) - sr.x);
+      const ny = Math.min(Math.max(0, py), bottom - minH);
+      h = bottom - ny;
+      y = ny;
+      break;
+    }
+    case 'nw': {
+      const nx = Math.min(Math.max(0, px), right - minW);
+      const ny = Math.min(Math.max(0, py), bottom - minH);
+      x = nx;
+      y = ny;
+      w = right - nx;
+      h = bottom - ny;
+      break;
+    }
+    default:
+      break;
+  }
+
+  x = Math.max(0, Math.min(x, pw - minW));
+  y = Math.max(0, Math.min(y, ph - minH));
+  w = Math.max(minW, Math.min(w, pw - x));
+  h = Math.max(minH, Math.min(h, ph - y));
+  return { x, y, w, h };
 }
 
 /** Top-most image at page coordinates (added images checked first — drawn above PDF images). */
@@ -303,12 +389,10 @@ export function findImageAtPagePoint(
     const el = added[i];
     if (el.type === 'image' && inRect(el.x, el.y, el.w, el.h)) return el;
   }
-  const iEd = imageEdits?.[pn];
   for (let i = pg.images.length - 1; i >= 0; i--) {
     const el = pg.images[i];
-    const ox = iEd?.[el.id]?.x ?? el.x;
-    const oy = iEd?.[el.id]?.y ?? el.y;
-    if (inRect(ox, oy, el.w, el.h)) return el;
+    const b = getImageOverlayBounds(el, pn, imageEdits);
+    if (inRect(b.x, b.y, b.w, b.h)) return el;
   }
   return null;
 }

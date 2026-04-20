@@ -70,8 +70,8 @@
               [style.color]="pages().length <= 1 ? '#cbd5e1' : '#b91c1c'"
               [style.cursor]="pages().length <= 1 ? 'not-allowed' : 'pointer'"
             >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
-                <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6h14zM10 11v6M14 11v6" />
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                <path d="M18 6L6 18M6 6l12 12" />
               </svg>
             </button>
             <img [src]="p.thumbUrl" style="width: 100%; display: block" [alt]="'p' + p.pageNum" />
@@ -197,27 +197,74 @@
           <canvas #canvas style="display: block"></canvas>
 
           @for (v of addedVideos()[pgv.pageNum] || []; track v.id) {
-            <video
-              [src]="v.src"
-              muted
-              playsinline
-              loop
-              autoplay
-              style="
-                position: absolute;
-                object-fit: cover;
-                pointer-events: none;
-                border-radius: 2px;
-              "
+            <div
+              style="position: absolute; border-radius: 2px; overflow: hidden"
               [style.left.px]="v.x"
               [style.top.px]="v.y"
               [style.width.px]="v.w"
               [style.height.px]="v.h"
-            ></video>
+            >
+              <video
+                [attr.data-added-video-id]="v.id"
+                [src]="v.src"
+                muted
+                playsinline
+                loop
+                autoplay
+                (loadedmetadata)="syncAddedVideoPlaying(v.id, $event)"
+                (play)="syncAddedVideoPlaying(v.id, $event)"
+                (pause)="syncAddedVideoPlaying(v.id, $event)"
+                style="
+                  position: absolute;
+                  left: 0;
+                  top: 0;
+                  width: 100%;
+                  height: 100%;
+                  object-fit: cover;
+                  pointer-events: none;
+                  border-radius: 2px;
+                "
+              ></video>
+              @if (editorMode() === 'view') {
+                <button
+                  type="button"
+                  [attr.title]="addedVideoPlaying()[v.id] ? 'Pause' : 'Play'"
+                  [attr.aria-label]="addedVideoPlaying()[v.id] ? 'Pause' : 'Play'"
+                  (pointerdown)="$event.stopPropagation()"
+                  (click)="toggleAddedVideoPlayback($event, v.id)"
+                  style="
+                    position: absolute;
+                    top: 50%;
+                    left: 50%;
+                    transform: translate(-50%, -50%);
+                    z-index: 2;
+                    padding: 8px;
+                    border: none;
+                    background: transparent;
+                    color: rgba(255, 255, 255, 0.96);
+                    cursor: pointer;
+                    filter: drop-shadow(0 1px 4px rgba(0, 0, 0, 0.55));
+                    pointer-events: auto;
+                  "
+                >
+                  @if (addedVideoPlaying()[v.id]) {
+                    <svg width="34" height="34" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                      <rect x="6" y="5.5" width="4.5" height="13" rx="1.25" />
+                      <rect x="13.5" y="5.5" width="4.5" height="13" rx="1.25" />
+                    </svg>
+                  } @else {
+                    <svg width="34" height="34" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                      <path d="M8 5v14l11-7z" />
+                    </svg>
+                  }
+                </button>
+              }
+            </div>
           }
 
           @for (el of editedTexts(); track el.id) {
             @if (pageEdits()[el.id] !== undefined && editingId() !== el.id) {
+              @let eb = overlayBounds(el);
               <div
                 class="edited-overlay"
                 style="
@@ -226,12 +273,12 @@
                   padding: 1px 2px;
                   z-index: 0;
                 "
-                [style.left.px]="el.x - 2"
-                [style.top.px]="el.y - 1"
-                [style.width.px]="el.w + 12"
-                [style.minHeight.px]="el.h + 4"
+                [style.left.px]="eb.x - 2"
+                [style.top.px]="eb.y - 1"
+                [style.width.px]="eb.w + 12"
+                [style.minHeight.px]="eb.h + 4"
                 [style.background]="pgv.bgColor || '#ffffff'"
-                [style.fontSize.px]="el.style.fontSizePx || el.h * 0.72"
+                [style.fontSize.px]="el.style.fontSizePx || eb.h * 0.72"
                 [style.fontFamily]="el.style.fontFamily"
                 [style.fontWeight]="el.style.fontWeight"
                 [style.fontStyle]="el.style.fontStyle"
@@ -325,7 +372,84 @@
                   (pointercancel)="onPointerUpMaybe($event, placementDrag)"
                   (mouseenter)="onOverlayEnter($event, active, bgTint)"
                   (mouseleave)="onOverlayLeave($event, active)"
-                ></div>
+                >
+                  @if (el.type === 'video') {
+                    <button
+                      type="button"
+                      [attr.title]="addedVideoPlaying()[el.id] ? 'Pause' : 'Play'"
+                      [attr.aria-label]="addedVideoPlaying()[el.id] ? 'Pause' : 'Play'"
+                      (pointerdown)="$event.stopPropagation()"
+                      (click)="toggleAddedVideoPlayback($event, el.id)"
+                      style="
+                        position: absolute;
+                        top: 50%;
+                        left: 50%;
+                        transform: translate(-50%, -50%);
+                        z-index: 4;
+                        padding: 6px;
+                        border: none;
+                        background: transparent;
+                        color: rgba(255, 255, 255, 0.96);
+                        cursor: pointer;
+                        filter: drop-shadow(0 1px 4px rgba(0, 0, 0, 0.55));
+                        pointer-events: auto;
+                      "
+                    >
+                      @if (addedVideoPlaying()[el.id]) {
+                        <svg width="30" height="30" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                          <rect x="6" y="5.5" width="4.5" height="13" rx="1.25" />
+                          <rect x="13.5" y="5.5" width="4.5" height="13" rx="1.25" />
+                        </svg>
+                      } @else {
+                        <svg width="30" height="30" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                          <path d="M8 5v14l11-7z" />
+                        </svg>
+                      }
+                    </button>
+                  }
+                  @if (active && showOverlayResizeHandles(el)) {
+                    @for (rh of resizeHandleList; track rh.id) {
+                      <div
+                        [style]="resizeHandleBoxStyle(rh)"
+                        (pointerdown)="onResizeHandlePointerDown($event, el, rh.id)"
+                        (pointermove)="onImagePointerMove($event)"
+                        (pointerup)="onImagePointerUp($event)"
+                        (pointercancel)="onImagePointerUp($event)"
+                      ></div>
+                    }
+                  }
+                  @if (active && (el.type === 'image' || el.type === 'video')) {
+                    <button
+                      type="button"
+                      title="Remove"
+                      aria-label="Remove"
+                      (pointerdown)="$event.stopPropagation()"
+                      (click)="onOverlayMediaDelete($event, el)"
+                      style="
+                        position: absolute;
+                        top: 2px;
+                        right: 2px;
+                        z-index: 3;
+                        width: 28px;
+                        height: 28px;
+                        padding: 0;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        border-radius: 6px;
+                        border: 1px solid rgba(0, 0, 0, 0.1);
+                        background: rgba(255, 255, 255, 0.95);
+                        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+                        color: #64748b;
+                        cursor: pointer;
+                      "
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                        <path d="M18 6L6 18M6 6l12 12" />
+                      </svg>
+                    </button>
+                  }
+                </div>
               }
             </div>
           }
@@ -341,46 +465,91 @@
                 border-radius: 2px;
                 box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
                 box-sizing: border-box;
+                background: #ffffff;
+                display: flex;
+                flex-direction: column;
                 pointer-events: auto;
               "
               [style.left.px]="t.x"
               [style.top.px]="t.y"
               [style.width.px]="t.w"
               [style.height.px]="t.h"
-              [style.outline]="selected ? '2px solid #059669' : 'none'"
+              [style.outline]="selected ? '2px solid #2aacb8' : 'none'"
               [style.pointer-events]="readOnly ? 'none' : 'auto'"
               (mousedown)="$event.stopPropagation()"
+              (pointermove)="onImagePointerMove($event)"
+              (pointerup)="onImagePointerUp($event)"
+              (pointercancel)="onImagePointerUp($event)"
               (click)="$event.stopPropagation(); selEl.set(t); editingId.set(null)"
             >
               @if (!readOnly) {
                 <div
-                  role="presentation"
-                  (pointerdown)="$event.stopPropagation(); onImagePointerDown($event, t)"
-                  (pointermove)="onImagePointerMove($event)"
-                  (pointerup)="onImagePointerUp($event)"
-                  (pointercancel)="onImagePointerUp($event)"
                   style="
-                    height: 22px;
+                    height: 35px;
                     flex-shrink: 0;
                     touch-action: none;
                     display: flex;
                     align-items: center;
-                    justify-content: center;
+                    justify-content: space-between;
                     gap: 6px;
-                    font-size: 12px;
-                    font-weight: 600;
                     user-select: none;
-                    background: linear-gradient(180deg, rgba(5, 150, 105, 0.22), rgba(5, 150, 105, 0.08));
-                    border-bottom: 1px solid rgba(5, 150, 105, 0.35);
+                    background: linear-gradient(180deg, rgba(42, 172, 184, 0.22), rgba(42, 172, 184, 0.08));
+                    border-bottom: 1px solid rgba(42, 172, 184, 0.35);
+                    padding: 0 6px 0 5px;
                   "
-                  [style.cursor]="draggingImageId() === t.id ? 'grabbing' : 'grab'"
-                  title="Drag to move table"
                 >
-                  <span aria-hidden style="letter-spacing: -2px; opacity: 0.7">⋮⋮</span>
-                  <span style="font-size: 10px">Drag</span>
+                  <div
+                    role="presentation"
+                    (pointerdown)="$event.stopPropagation(); onImagePointerDown($event, t)"
+                    (pointermove)="onImagePointerMove($event)"
+                    (pointerup)="onImagePointerUp($event)"
+                    (pointercancel)="onImagePointerUp($event)"
+                    style="
+                      flex: 1;
+                      min-width: 0;
+                      height: 100%;
+                      display: flex;
+                      align-items: center;
+                      gap: 6px;
+                      font-size: 12px;
+                      font-weight: 600;
+                    "
+                    [style.cursor]="draggingImageId() === t.id ? 'grabbing' : 'grab'"
+                    title="Drag to move table"
+                  >
+                    <span aria-hidden style="letter-spacing: -2px; opacity: 0.7; font-weight: bolder; font-size: 14px;">⋮⋮</span>
+                  </div>
+                  @if (selected) {
+                    <button
+                      type="button"
+                      title="Remove table"
+                      aria-label="Remove table"
+                      (pointerdown)="$event.stopPropagation()"
+                      (click)="$event.stopPropagation(); removeTableInspector(t)"
+                      style="
+                        flex-shrink: 0;
+                        width: 28px;
+                        height: 28px;
+                        padding: 0;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        border-radius: 6px;
+                        border: 1px solid rgba(0, 0, 0, 0.1);
+                        background: rgba(255, 255, 255, 0.95);
+                        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+                        color: #64748b;
+                        cursor: pointer;
+                      "
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                        <path d="M18 6L6 18M6 6l12 12" />
+                      </svg>
+                    </button>
+                  }
                 </div>
               }
-              <div [style.height]="readOnly ? '100%' : 'calc(100% - 22px)'" style="overflow: auto">
+              <div style="flex: 1; min-height: 0; overflow: auto">
                 <app-placed-table-grid
                   [rows]="t.rows"
                   [cols]="t.cols"
@@ -390,6 +559,17 @@
                   (cellFocus)="onPlacedTableCellFocus(t.id)"
                 />
               </div>
+              @if (selected && !readOnly) {
+                @for (rh of resizeHandleList; track rh.id) {
+                  <div
+                    [style]="resizeHandleBoxStyle(rh)"
+                    (pointerdown)="onResizeHandlePointerDown($event, t, rh.id)"
+                    (pointermove)="onImagePointerMove($event)"
+                    (pointerup)="onImagePointerUp($event)"
+                    (pointercancel)="onImagePointerUp($event)"
+                  ></div>
+                }
+              }
             </div>
           }
 
@@ -415,6 +595,9 @@
               [style.outline]="selected ? '2px solid #2aacb8' : 'none'"
               [style.pointer-events]="readOnly ? 'none' : 'auto'"
               (mousedown)="$event.stopPropagation()"
+              (pointermove)="onImagePointerMove($event)"
+              (pointerup)="onImagePointerUp($event)"
+              (pointercancel)="onImagePointerUp($event)"
               (click)="$event.stopPropagation(); selEl.set(rt); editingId.set(null)"
             >
               @if (!readOnly) {
@@ -425,24 +608,23 @@
                   (pointerup)="onImagePointerUp($event)"
                   (pointercancel)="onImagePointerUp($event)"
                   style="
-                    height: 22px;
+                    height: 35px;
                     flex-shrink: 0;
                     touch-action: none;
                     display: flex;
                     align-items: center;
-                    justify-content: center;
                     gap: 6px;
                     font-size: 12px;
                     font-weight: 600;
                     user-select: none;
                     background: linear-gradient(180deg, rgba(42, 172, 184, 0.22), rgba(42, 172, 184, 0.08));
                     border-bottom: 1px solid rgba(42, 172, 184, 0.35);
+                    padding-left: 5px;
                   "
                   [style.cursor]="draggingImageId() === rt.id ? 'grabbing' : 'grab'"
                   title="Drag to move · or hold Alt (⌥) and drag inside the text"
                 >
-                  <span aria-hidden style="letter-spacing: -2px; opacity: 0.7">⋮⋮</span>
-                  <span style="font-size: 10px">Drag</span>
+                  <span aria-hidden style="letter-spacing: -2px; opacity: 0.7; font-weight: bolder; font-size: 14px;">⋮⋮</span>
                 </div>
               }
               <div style="flex: 1; min-height: 0; overflow: hidden">
@@ -457,6 +639,17 @@
                   (altDragPointerDown)="onAltDragUserText($event, rt)"
                 />
               </div>
+              @if (selected && !readOnly) {
+                @for (rh of resizeHandleList; track rh.id) {
+                  <div
+                    [style]="resizeHandleBoxStyle(rh)"
+                    (pointerdown)="onResizeHandlePointerDown($event, rt, rh.id)"
+                    (pointermove)="onImagePointerMove($event)"
+                    (pointerup)="onImagePointerUp($event)"
+                    (pointercancel)="onImagePointerUp($event)"
+                  ></div>
+                }
+              }
             </div>
           }
         </div>
@@ -612,9 +805,9 @@
             [disabled]="editorMode() === 'view'"
             (click)="addDynamicTable()"
             style="width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; border-radius: 10px"
-            [style.border]="'1.5px solid ' + (activeAddTool() === 'table' ? '#059669' : 'rgba(5,150,105,0.45)')"
-            [style.background]="activeAddTool() === 'table' ? '#059669' : 'rgba(5,150,105,0.12)'"
-            [style.color]="activeAddTool() === 'table' ? '#fff' : '#047857'"
+            [style.border]="'1.5px solid ' + (activeAddTool() === 'table' ? '#2aacb8' : 'rgba(42,172,184,0.45)')"
+            [style.background]="activeAddTool() === 'table' ? '#2aacb8' : 'rgba(42,172,184,0.12)'"
+            [style.color]="activeAddTool() === 'table' ? '#fff' : '#0f766e'"
             [style.cursor]="editorMode() === 'view' ? 'not-allowed' : 'pointer'"
             [style.opacity]="editorMode() === 'view' ? 0.45 : 1"
           >
@@ -624,11 +817,7 @@
             </svg>
           </button>
         </div>
-        <p class="inspector__hint">
-          Image, rich text, video, or table is added centered on the current page. Use the text box for full font and
-          formatting controls. Drag the colored top strip to move. Drop files on the canvas to add or replace
-          images/videos.
-        </p>
+       
       </div>
 
       <div class="inspector__block">
@@ -679,35 +868,17 @@
             [style.color]="pages().length <= 1 ? '#94a3b8' : '#b91c1c'"
             [style.cursor]="pages().length <= 1 ? 'not-allowed' : 'pointer'"
           >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
-              <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6h14zM10 11v6M14 11v6" />
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+              <path d="M18 6L6 18M6 6l12 12" />
             </svg>
             Delete page {{ pgv.pageNum }}
           </button>
         </div>
-        <p style="font-size: 10px; color: #94a3b8; margin: 8px 0 0; line-height: 1.45">
-          Add inserts a blank page (same size as the current page) after the page you’re on. Delete removes the current
-          page. Undo applies to both.
-        </p>
       </div>
 
       @if (selEl(); as sel) {
         <div>
           <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 16px">
-            <span
-              style="
-                font-size: 9px;
-                padding: 2px 7px;
-                border-radius: 4px;
-                font-weight: 700;
-                text-transform: uppercase;
-                letter-spacing: 0.5px;
-                color: #fff;
-              "
-              [style.background]="typeBadgeColor(sel.type)"
-              >{{ typeBadgeLabel(sel.type) }}</span
-            >
-            <span style="font-size: 12px; color: #888; font-weight: 600">Inspector</span>
             @if (
               (pageEdits()[sel.id] !== undefined && sel.type === 'text') ||
               (sel.type === 'image' &&
@@ -723,15 +894,6 @@
                   border: 1px solid rgba(245, 158, 11, 0.3);
                 "
                 >EDITED</span
-              >
-            }
-            @if ((sel.type === 'image' || sel.type === 'video' || sel.type === 'table' || sel.type === 'userText') && sel._userAdded) {
-              <span
-                style="font-size: 9px; padding: 2px 6px; border-radius: 4px"
-                [style.background]="placedBadgeBg(sel.type)"
-                [style.color]="placedBadgeColor(sel.type)"
-                [style.border]="placedBadgeBorder(sel.type)"
-                >PLACED</span
               >
             }
             <button
@@ -834,13 +996,6 @@
                 Placed text
               </div>
               @if (editorMode() === 'edit') {
-                <div style="margin-bottom: 10px">
-                  <app-rich-text-toolbar [disabled]="false" [fontChoices]="tokens().fonts" />
-                  <p style="font-size: 10px; color: #64748b; margin: 8px 0 0; line-height: 1.45">
-                    Edit here or in the box on the page. Select text, then use the toolbar for fonts, sizes, colors,
-                    lists, and links.
-                  </p>
-                </div>
               }
               <app-rich-text-editor-block
                 [html]="ut.html"
@@ -849,28 +1004,6 @@
                 [fontChoices]="tokens().fonts"
                 [minHeight]="120"
               />
-              <div style="display: flex; gap: 10px; margin-top: 10px; margin-bottom: 8px; align-items: center">
-                <label style="font-size: 10px; color: #64748b; width: 44px">Width</label>
-                <input
-                  type="number"
-                  min="80"
-                  max="2000"
-                  [value]="Math.round(ut.w)"
-                  (input)="patchUserTextWidth(sel, $event)"
-                  style="flex: 1; padding: 6px 8px; border-radius: 6px; border: 1px solid #d1d9e0; font-size: 12px"
-                />
-              </div>
-              <div style="display: flex; gap: 10px; margin-bottom: 12px; align-items: center">
-                <label style="font-size: 10px; color: #64748b; width: 44px">Height</label>
-                <input
-                  type="number"
-                  min="60"
-                  max="2000"
-                  [value]="Math.round(ut.h)"
-                  (input)="patchUserTextHeight(sel, $event)"
-                  style="flex: 1; padding: 6px 8px; border-radius: 6px; border: 1px solid #d1d9e0; font-size: 12px"
-                />
-              </div>
               <button
                 type="button"
                 (click)="removeUserTextInspector(sel)"
@@ -883,8 +1016,15 @@
                   border-radius: 6px;
                   font-size: 11px;
                   cursor: pointer;
+                  display: flex;
+                  align-items: center;
+                  justify-content: center;
+                  gap: 8px;
                 "
               >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                  <path d="M18 6L6 18M6 6l12 12" />
+                </svg>
                 Remove from page
               </button>
             </div>
@@ -909,9 +1049,7 @@
               @if (editorMode() === 'edit') {
                 <div style="margin-bottom: 10px">
                   <app-rich-text-toolbar [disabled]="false" [fontChoices]="tokens().fonts" />
-                  <p style="font-size: 10px; color: #64748b; margin: 8px 0 0; line-height: 1.45">
-                    Click a cell on the page, select text, then use the toolbar (bold, lists, colors, link, etc.).
-                  </p>
+               
                 </div>
               }
               <p style="font-size: 10px; color: #64748b; margin-bottom: 10px; line-height: 1.5">
@@ -952,8 +1090,15 @@
                   border-radius: 6px;
                   font-size: 11px;
                   cursor: pointer;
+                  display: flex;
+                  align-items: center;
+                  justify-content: center;
+                  gap: 8px;
                 "
               >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                  <path d="M18 6L6 18M6 6l12 12" />
+                </svg>
                 Remove from page
               </button>
             </div>
@@ -1015,8 +1160,15 @@
                     border-radius: 6px;
                     font-size: 11px;
                     cursor: pointer;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    gap: 8px;
                   "
                 >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                    <path d="M18 6L6 18M6 6l12 12" />
+                  </svg>
                   Remove from page
                 </button>
               </div>
@@ -1095,8 +1247,15 @@
                     border-radius: 6px;
                     font-size: 11px;
                     cursor: pointer;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    gap: 8px;
                   "
                 >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                    <path d="M18 6L6 18M6 6l12 12" />
+                  </svg>
                   {{ sel._userAdded ? 'Remove from page' : 'Remove (fill with background)' }}
                 </button>
               </div>

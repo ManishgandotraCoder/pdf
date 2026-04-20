@@ -1,9 +1,1 @@
 <app-rich-text-toolbar [disabled]="disabled()" [fontChoices]="fontChoices()" />
-<div
-  #editable
-  class="rich-text-editor-surface"
-  [attr.contenteditable]="!disabled() ? true : null"
-  (input)="onInput($event)"
-  [style.width]="'100%'"
-  [style.minHeight.px]="minHeight()"
-></div>

@@ -30,7 +30,9 @@ import {
   ImageDragState,
   ImageEditsMap,
   ImageElement,
+  LayoutEditsMap,
   PageData,
+  ResizeHandleId,
   SelElement,
   TableElement,
   TemplateCluster,
@@ -49,6 +51,7 @@ import {
   isLikelyImageFile,
   isLikelyVideoFile,
   readFileAsDataURL,
+  rectFromResizeHandle,
   regionFromPdfDataUrl,
   remapPageKeyedState,
   remapPageKeyedStateInsert,
@@ -85,6 +88,7 @@ export class PdfDesignExtractorComponent {
   readonly editingId = signal<string | null>(null);
   readonly edits = signal<EditsMap>({});
   readonly imageEdits = signal<ImageEditsMap>({});
+  readonly layoutEdits = signal<LayoutEditsMap>({});
   readonly addedImages = signal<AddedImagesMap>({});
   readonly addedVideos = signal<AddedVideosMap>({});
   readonly addedTables = signal<AddedTablesMap>({});
@@ -98,6 +102,8 @@ export class PdfDesignExtractorComponent {
   readonly viewerImageDropActive = signal(false);
   readonly draggingImageId = signal<string | null>(null);
   readonly historyUi = signal(0);
+  /** Tracks whether each placed video is currently playing (for play/stop toggle UI). */
+  readonly addedVideoPlaying = signal<Record<string, boolean>>({});
 
   readonly canvasRef = viewChild<ElementRef<HTMLCanvasElement>>('canvas');
   readonly pageStageRef = viewChild<ElementRef<HTMLDivElement>>('pageStage');
@@ -167,11 +173,13 @@ export class PdfDesignExtractorComponent {
           if (!ed?.src || ed?.removed) continue;
           const ox = ed?.x ?? el.x;
           const oy = ed?.y ?? el.y;
-          if (ox !== el.x || oy !== el.y) {
+          const ow = ed?.w ?? el.w;
+          const oh = ed?.h ?? el.h;
+          if (ox !== el.x || oy !== el.y || ow !== el.w || oh !== el.h) {
             ctx.fillStyle = bg;
             ctx.fillRect(el.x, el.y, el.w, el.h);
           }
-          await drawImageFit(ctx, ed.src, ox, oy, el.w, el.h);
+          await drawImageFit(ctx, ed.src, ox, oy, ow, oh);
           if (cancelled) return;
         }
         for (const el of this.addedImages()[pn] || []) {
@@ -218,6 +226,7 @@ export class PdfDesignExtractorComponent {
     const snap: HistorySnapshot = {
       edits: structuredClone(this.edits()),
       imageEdits: structuredClone(this.imageEdits()),
+      layoutEdits: structuredClone(this.layoutEdits()),
       addedImages: structuredClone(this.addedImages()),
       addedVideos: structuredClone(this.addedVideos()),
       addedTables: structuredClone(this.addedTables()),
@@ -234,6 +243,7 @@ export class PdfDesignExtractorComponent {
     const current: HistorySnapshot = {
       edits: structuredClone(this.edits()),
       imageEdits: structuredClone(this.imageEdits()),
+      layoutEdits: structuredClone(this.layoutEdits()),
       addedImages: structuredClone(this.addedImages()),
       addedVideos: structuredClone(this.addedVideos()),
       addedTables: structuredClone(this.addedTables()),
@@ -243,6 +253,7 @@ export class PdfDesignExtractorComponent {
     const prev = this.historyStack.pop()!;
     this.edits.set(prev.edits);
     this.imageEdits.set(prev.imageEdits);
+    this.layoutEdits.set(prev.layoutEdits ?? {});
     this.addedImages.set(prev.addedImages);
     this.addedVideos.set(prev.addedVideos);
     this.addedTables.set(prev.addedTables || {});
@@ -261,6 +272,7 @@ export class PdfDesignExtractorComponent {
     const current: HistorySnapshot = {
       edits: structuredClone(this.edits()),
       imageEdits: structuredClone(this.imageEdits()),
+      layoutEdits: structuredClone(this.layoutEdits()),
       addedImages: structuredClone(this.addedImages()),
       addedVideos: structuredClone(this.addedVideos()),
       addedTables: structuredClone(this.addedTables()),
@@ -270,6 +282,7 @@ export class PdfDesignExtractorComponent {
     const next = this.redoStack.pop()!;
     this.edits.set(next.edits);
     this.imageEdits.set(next.imageEdits);
+    this.layoutEdits.set(next.layoutEdits ?? {});
     this.addedImages.set(next.addedImages);
     this.addedVideos.set(next.addedVideos);
     this.addedTables.set(next.addedTables || {});
@@ -360,6 +373,7 @@ export class PdfDesignExtractorComponent {
     this.templates.set(clusterTemplates(newPages));
     this.edits.update((prev) => remapPageKeyedState(prev, delPn));
     this.imageEdits.update((prev) => remapPageKeyedState(prev, delPn));
+    this.layoutEdits.update((prev) => remapPageKeyedState(prev, delPn));
     this.addedImages.update((prev) => remapPageKeyedState(prev, delPn));
     this.addedVideos.update((prev) => remapPageKeyedState(prev, delPn));
     this.addedTables.update((prev) => remapPageKeyedState(prev, delPn));
@@ -391,6 +405,7 @@ export class PdfDesignExtractorComponent {
     this.templates.set(clusterTemplates(newPages));
     this.edits.update((prev) => remapPageKeyedStateInsert(prev, insert1Based));
     this.imageEdits.update((prev) => remapPageKeyedStateInsert(prev, insert1Based));
+    this.layoutEdits.update((prev) => remapPageKeyedStateInsert(prev, insert1Based));
     this.addedImages.update((prev) => remapPageKeyedStateInsert(prev, insert1Based));
     this.addedVideos.update((prev) => remapPageKeyedStateInsert(prev, insert1Based));
     this.addedTables.update((prev) => remapPageKeyedStateInsert(prev, insert1Based));
@@ -415,6 +430,7 @@ export class PdfDesignExtractorComponent {
     this.edits.set({});
     this.editingId.set(null);
     this.imageEdits.set({});
+    this.layoutEdits.set({});
     this.addedImages.set({});
     this.addedVideos.set({});
     this.addedTables.set({});
@@ -465,7 +481,11 @@ export class PdfDesignExtractorComponent {
     this.loading.set(false);
   }
 
-  patchImageEdit(pageNum: number, id: string, patch: { removed?: boolean; src?: string; x?: number; y?: number }): void {
+  patchImageEdit(
+    pageNum: number,
+    id: string,
+    patch: { removed?: boolean; src?: string; x?: number; y?: number; w?: number; h?: number },
+  ): void {
     this.imageEdits.update((prev) => ({
       ...prev,
       [pageNum]: { ...(prev[pageNum] || {}), [id]: { ...(prev[pageNum]?.[id] || {}), ...patch } },
@@ -788,6 +808,160 @@ export class PdfDesignExtractorComponent {
     return { x: (clientX - r.left) / z, y: (clientY - r.top) / z };
   }
 
+  readonly resizeHandleList: readonly { id: ResizeHandleId; cursor: string }[] = [
+    { id: 'nw', cursor: 'nw-resize' },
+    { id: 'n', cursor: 'n-resize' },
+    { id: 'ne', cursor: 'ne-resize' },
+    { id: 'e', cursor: 'e-resize' },
+    { id: 'se', cursor: 'se-resize' },
+    { id: 's', cursor: 's-resize' },
+    { id: 'sw', cursor: 'sw-resize' },
+    { id: 'w', cursor: 'w-resize' },
+  ];
+
+  showOverlayResizeHandles(el: SelElement): boolean {
+    if (this.editorMode() !== 'edit') return false;
+    if (el.type === 'text' && this.editingId() === el.id) return false;
+    return el.type === 'image' || el.type === 'video' || el.type === 'text';
+  }
+
+  resizeHandlePositionStyle(id: ResizeHandleId): string {
+    const pos: Record<ResizeHandleId, string> = {
+      nw: 'left:0;top:0;transform:translate(-50%,-50%);',
+      n: 'left:50%;top:0;transform:translate(-50%,-50%);',
+      ne: 'left:100%;top:0;transform:translate(-50%,-50%);',
+      e: 'left:100%;top:50%;transform:translate(-50%,-50%);',
+      se: 'left:100%;top:100%;transform:translate(-50%,-50%);',
+      s: 'left:50%;top:100%;transform:translate(-50%,-50%);',
+      sw: 'left:0;top:100%;transform:translate(-50%,-50%);',
+      w: 'left:0;top:50%;transform:translate(-50%,-50%);',
+    };
+    return (
+      'position:absolute;' +
+      pos[id] +
+      'width:9px;height:9px;z-index:7;box-sizing:border-box;background:#fff;border:1.5px solid #2aacb8;border-radius:2px;'
+    );
+  }
+
+  resizeHandleBoxStyle(rh: { id: ResizeHandleId; cursor: string }): string {
+    return `${this.resizeHandlePositionStyle(rh.id)}cursor:${rh.cursor};`;
+  }
+
+  onResizeHandlePointerDown(e: PointerEvent, el: SelElement, handle: ResizeHandleId): void {
+    if (e.button !== 0 || this.editorMode() !== 'edit') return;
+    e.stopPropagation();
+    e.preventDefault();
+    const pg = this.pages()[this.selPage()];
+    if (!pg) return;
+    const pn = pg.pageNum;
+    let mediaKind: NonNullable<ImageDragState['mediaKind']>;
+    if (el.type === 'video') mediaKind = 'video';
+    else if (el.type === 'table') mediaKind = 'table';
+    else if (el.type === 'userText') mediaKind = 'userText';
+    else if (el.type === 'text') mediaKind = 'text';
+    else if (el.type === 'image') {
+      const img = el as ImageElement;
+      if (this.imageEdits()[pn]?.[img.id]?.removed) return;
+      mediaKind = img._userAdded ? 'imageUser' : 'imagePdf';
+    } else return;
+
+    const ob = this.overlayBounds(el);
+    const { x: px, y: py } = this.clientToPageCoords(e.clientX, e.clientY);
+    const imgEl = el.type === 'image' ? (el as ImageElement) : null;
+    this.imageDrag = {
+      mode: 'resize',
+      handle,
+      startRect: { x: ob.x, y: ob.y, w: ob.w, h: ob.h },
+      pointerId: e.pointerId,
+      elId: el.id,
+      pn,
+      mediaKind,
+      grabDx: 0,
+      grabDy: 0,
+      pw: pg.width,
+      ph: pg.height,
+      elW: ob.w,
+      elH: ob.h,
+      startPx: px,
+      startPy: py,
+      latestNX: ob.x,
+      latestNY: ob.y,
+      moved: false,
+      captured: false,
+      userAdded: imgEl ? !!imgEl._userAdded : undefined,
+      fullUrl: imgEl && !imgEl._userAdded ? pg.fullUrl : undefined,
+      pdfImageEl: imgEl && !imgEl._userAdded ? imgEl : undefined,
+      extracting: false,
+      extractDone: false,
+    };
+    this.draggingImageId.set(el.id);
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+  }
+
+  private applyPlacementRect(d: ImageDragState, r: { x: number; y: number; w: number; h: number }): void {
+    const { pn, elId } = d;
+    const mk = d.mediaKind;
+    if (mk === 'video') {
+      this.addedVideos.update((prev) => ({
+        ...prev,
+        [pn]: ((prev[pn] || []) as VideoElement[]).map((a) => (a.id === elId ? { ...a, ...r } : a)),
+      }));
+      this.selEl.update((prev) =>
+        prev?.id === elId && prev.type === 'video' ? ({ ...prev, ...r } as SelElement) : prev,
+      );
+      return;
+    }
+    if (mk === 'table') {
+      this.addedTables.update((prev) => ({
+        ...prev,
+        [pn]: ((prev[pn] || []) as TableElement[]).map((a) => (a.id === elId ? { ...a, ...r } : a)),
+      }));
+      this.selEl.update((prev) =>
+        prev?.id === elId && prev.type === 'table' ? ({ ...prev, ...r } as SelElement) : prev,
+      );
+      return;
+    }
+    if (mk === 'userText') {
+      this.addedRichTexts.update((prev) => ({
+        ...prev,
+        [pn]: ((prev[pn] || []) as UserTextElement[]).map((a) => (a.id === elId ? { ...a, ...r } : a)),
+      }));
+      this.selEl.update((prev) =>
+        prev?.id === elId && prev.type === 'userText' ? ({ ...prev, ...r } as SelElement) : prev,
+      );
+      return;
+    }
+    if (mk === 'text') {
+      this.layoutEdits.update((prev) => ({
+        ...prev,
+        [pn]: {
+          ...(prev[pn] || {}),
+          [elId]: { ...(prev[pn]?.[elId] || {}), x: r.x, y: r.y, w: r.w, h: r.h },
+        },
+      }));
+      this.selEl.update((prev) =>
+        prev?.id === elId && prev.type === 'text' ? ({ ...prev, ...r } as SelElement) : prev,
+      );
+      return;
+    }
+    if (mk === 'imageUser') {
+      this.addedImages.update((prev) => ({
+        ...prev,
+        [pn]: ((prev[pn] || []) as ImageElement[]).map((a) => (a.id === elId ? { ...a, ...r } : a)),
+      }));
+      this.selEl.update((prev) =>
+        prev?.id === elId && prev.type === 'image' ? ({ ...prev, ...r } as SelElement) : prev,
+      );
+      return;
+    }
+    if (mk === 'imagePdf') {
+      this.patchImageEdit(pn, elId, { x: r.x, y: r.y, w: r.w, h: r.h });
+      this.selEl.update((prev) =>
+        prev?.id === elId && prev.type === 'image' ? ({ ...prev, ...r } as SelElement) : prev,
+      );
+    }
+  }
+
   onImagePointerDown(e: PointerEvent, el: SelElement): void {
     if (e.button !== 0) return;
     if (el.type === 'video') {
@@ -891,13 +1065,14 @@ export class PdfDesignExtractorComponent {
       pointerId: e.pointerId,
       elId: imgEl.id,
       pn,
+      mediaKind: imgEl._userAdded ? 'imageUser' : 'imagePdf',
       userAdded: !!imgEl._userAdded,
       grabDx: px - ob.x,
       grabDy: py - ob.y,
       pw: pg.width,
       ph: pg.height,
-      elW: imgEl.w,
-      elH: imgEl.h,
+      elW: ob.w,
+      elH: ob.h,
       startPx: px,
       startPy: py,
       latestNX: ob.x,
@@ -917,6 +1092,23 @@ export class PdfDesignExtractorComponent {
     const d = this.imageDrag;
     if (!d || e.pointerId !== d.pointerId) return;
     const { x: px, y: py } = this.clientToPageCoords(e.clientX, e.clientY);
+
+    if (d.mode === 'resize' && d.handle && d.startRect) {
+      if (!d.moved && Math.hypot(px - d.startPx, py - d.startPy) < 2) return;
+      if (!d.moved) {
+        d.moved = true;
+        if (!d.captured) {
+          this.captureBeforeChange();
+          d.captured = true;
+        }
+      }
+      const nr = rectFromResizeHandle(d.handle, d.startRect, px, py, d.pw, d.ph);
+      this.applyPlacementRect(d, nr);
+      d.latestNX = nr.x;
+      d.latestNY = nr.y;
+      return;
+    }
+
     if (!d.moved && Math.hypot(px - d.startPx, py - d.startPy) < 4) return;
     if (!d.moved) {
       d.moved = true;
@@ -965,7 +1157,7 @@ export class PdfDesignExtractorComponent {
       return;
     }
 
-    if (d.userAdded) {
+    if (d.mediaKind === 'imageUser') {
       this.addedImages.update((prev) => ({
         ...prev,
         [d.pn]: ((prev[d.pn] || []) as ImageElement[]).map((a) => (a.id === d.elId ? { ...a, x: nx, y: ny } : a)),
@@ -977,7 +1169,7 @@ export class PdfDesignExtractorComponent {
     }
 
     const hasSrc = !!this.imageEdits()[d.pn]?.[d.elId]?.src;
-    if (!d.userAdded && (hasSrc || d.extractDone)) {
+    if (d.mediaKind === 'imagePdf' && (hasSrc || d.extractDone)) {
       this.patchImageEdit(d.pn, d.elId, { x: nx, y: ny });
       return;
     }
@@ -1069,6 +1261,7 @@ export class PdfDesignExtractorComponent {
     this.tokens.set({ colors: [], fonts: [], sizes: [] });
     this.edits.set({});
     this.imageEdits.set({});
+    this.layoutEdits.set({});
     this.addedImages.set({});
     this.addedVideos.set({});
     this.addedTables.set({});
@@ -1136,7 +1329,7 @@ export class PdfDesignExtractorComponent {
       y,
       w,
       h,
-      html: '<p>Type here…</p>',
+      html: '<p></p>',
       _userAdded: true,
     };
     this.addedRichTexts.update((prev) => ({
@@ -1170,7 +1363,11 @@ export class PdfDesignExtractorComponent {
     const id = this.editingId();
     const pg = this.pg();
     if (!id || !pg) return null;
-    return pg.textElements.find((e) => e.id === id) ?? null;
+    const raw = pg.textElements.find((e) => e.id === id);
+    if (!raw) return null;
+    const le = this.layoutEdits()[pg.pageNum]?.[id];
+    if (!le) return raw;
+    return { ...raw, ...le };
   }
 
   applyCropResult(url: string): void {
@@ -1183,11 +1380,41 @@ export class PdfDesignExtractorComponent {
     if (el.type === 'image' && pg) {
       return getImageOverlayBounds(el as ImageElement, pg.pageNum, this.imageEdits());
     }
+    if (el.type === 'text' && pg) {
+      const le = this.layoutEdits()[pg.pageNum]?.[el.id];
+      if (!le) return { x: el.x, y: el.y, w: el.w, h: el.h };
+      return {
+        x: le.x ?? el.x,
+        y: le.y ?? el.y,
+        w: le.w ?? el.w,
+        h: le.h ?? el.h,
+      };
+    }
     return { x: el.x, y: el.y, w: el.w, h: el.h };
   }
 
   max2(n: number): number {
     return Math.max(n, 2);
+  }
+
+  private addedVideoEl(videoId: string): HTMLVideoElement | null {
+    const stage = this.pageStageRef()?.nativeElement;
+    if (!stage) return null;
+    return stage.querySelector(`video[data-added-video-id="${CSS.escape(videoId)}"]`);
+  }
+
+  syncAddedVideoPlaying(videoId: string, ev: Event): void {
+    const el = ev.target as HTMLVideoElement;
+    this.addedVideoPlaying.update((m) => ({ ...m, [videoId]: !el.paused }));
+  }
+
+  toggleAddedVideoPlayback(e: Event, videoId: string): void {
+    e.stopPropagation();
+    e.preventDefault();
+    const node = this.addedVideoEl(videoId);
+    if (!node) return;
+    if (node.paused) void node.play().catch(() => { });
+    else node.pause();
   }
 
   onOverlayClick(e: MouseEvent, el: SelElement, placementDrag: boolean, active: boolean): void {
@@ -1342,40 +1569,12 @@ export class PdfDesignExtractorComponent {
     this.handleRemoveImage(sel);
   }
 
-  typeBadgeLabel(t: string): string {
-    return t === 'userText' ? 'text+' : t;
-  }
-
-  typeBadgeColor(t: string): string {
-    const map: Record<string, string> = {
-      text: '#2aacb8',
-      userText: '#2aacb8',
-      shape: '#8b5cf6',
-      image: '#f59e0b',
-      video: '#6366f1',
-      table: '#059669',
-    };
-    return map[t] || '#555';
-  }
-
-  placedBadgeBg(t: string): string {
-    if (t === 'video') return 'rgba(99,102,241,0.12)';
-    if (t === 'table') return 'rgba(5,150,105,0.12)';
-    if (t === 'userText') return 'rgba(13,148,136,0.14)';
-    return 'rgba(42,172,184,0.12)';
-  }
-
-  placedBadgeColor(t: string): string {
-    if (t === 'video') return '#4338ca';
-    if (t === 'table') return '#047857';
-    return '#0f766e';
-  }
-
-  placedBadgeBorder(t: string): string {
-    if (t === 'video') return '1px solid rgba(99,102,241,0.3)';
-    if (t === 'table') return '1px solid rgba(5,150,105,0.3)';
-    if (t === 'userText') return '1px solid rgba(13,148,136,0.35)';
-    return '1px solid rgba(42,172,184,0.3)';
+  /** Delete image or video from the on-canvas selection control (stops event propagation). */
+  onOverlayMediaDelete(e: Event, sel: SelElement): void {
+    e.stopPropagation();
+    e.preventDefault();
+    if (sel.type === 'video') this.removeVideoInspector(sel);
+    else if (sel.type === 'image') this.removeImageInspector(sel);
   }
 
   editSummaryEntries(): {

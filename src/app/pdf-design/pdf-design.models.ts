@@ -103,8 +103,16 @@ export interface TemplateCluster {
 export type EditsMap = Record<number, Record<string, string>>;
 export type ImageEditsMap = Record<
   number,
-  Record<string, { removed?: boolean; src?: string; x?: number; y?: number }>
+  Record<string, { removed?: boolean; src?: string; x?: number; y?: number; w?: number; h?: number }>
 >;
+
+/** PDF text box geometry overrides (undo-friendly; merged in overlay). */
+export type LayoutEditsMap = Record<
+  number,
+  Record<string, { x?: number; y?: number; w?: number; h?: number }>
+>;
+
+export type ResizeHandleId = 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w';
 export type AddedImagesMap = Record<number, ImageElement[]>;
 export type AddedVideosMap = Record<number, VideoElement[]>;
 export type AddedTablesMap = Record<number, TableElement[]>;
@@ -127,6 +135,7 @@ export interface DesignTokens {
 export interface HistorySnapshot {
   edits: EditsMap;
   imageEdits: ImageEditsMap;
+  layoutEdits: LayoutEditsMap;
   addedImages: AddedImagesMap;
   addedVideos: AddedVideosMap;
   addedTables: AddedTablesMap;
@@ -138,7 +147,11 @@ export interface ImageDragState {
   elId: string;
   pn: number;
   userAdded?: boolean;
-  mediaKind?: 'video' | 'table' | 'userText';
+  mediaKind?: 'video' | 'table' | 'userText' | 'text' | 'imageUser' | 'imagePdf';
+  /** When set with `handle`, user is resizing instead of moving. */
+  mode?: 'move' | 'resize';
+  handle?: ResizeHandleId;
+  startRect?: { x: number; y: number; w: number; h: number };
   grabDx: number;
   grabDy: number;
   pw: number;
