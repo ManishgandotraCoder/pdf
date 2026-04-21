@@ -262,6 +262,16 @@ select:focus-visible {
   min-width: 0;
 }
 
+.workspace--preview .sidebar,
+.workspace--preview .inspector {
+  display: none !important;
+}
+
+.workspace--preview .workspace-main {
+  flex: 1;
+  max-width: 100%;
+}
+
 .topbar {
   min-height: 64px;
   background: var(--surface-elevated);
@@ -494,6 +504,38 @@ select:focus-visible {
   padding-right: 26px;
 }
 
+.rich-text-toolbar-wrap .rt-size-input {
+  width: 56px;
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  padding: 6px 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-default);
+  background: var(--surface-elevated);
+  color: var(--text-primary);
+}
+
+.rich-text-toolbar-wrap .rt-size-input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.rich-text-toolbar-wrap .rt-toolbar-current {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-muted);
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 4px 6px;
+  border-radius: var(--radius-sm);
+  background: rgba(13, 148, 136, 0.08);
+  border: 1px solid rgba(13, 148, 136, 0.2);
+}
+
 .rich-text-toolbar-wrap .rt-swatch-label {
   display: inline-flex;
   align-items: center;
@@ -689,6 +731,10 @@ select:focus-visible {
   width: 100%;
   box-shadow: var(--shadow-lg);
   border: 1px solid var(--border-hairline);
+}
+
+.modal-panel--wide {
+  max-width: 520px;
 }
 
 .modal-panel__title {

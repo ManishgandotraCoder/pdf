@@ -134,11 +134,30 @@ export function ensureTableCells(rows: number, cols: number, prev: string[][] | 
   return next;
 }
 
+/** Improves list / block behaviour in contenteditable across browsers. */
+function primeRichCommand(cmd: string): void {
+  if (cmd !== 'insertUnorderedList' && cmd !== 'insertOrderedList') return;
+  const doc = document as Document & {
+    execCommand(commandId: string, showUI?: boolean, value?: string | boolean): boolean;
+  };
+  try {
+    doc.execCommand('defaultParagraphSeparator', false, 'p');
+  } catch {
+    /* ignore */
+  }
+  try {
+    doc.execCommand('styleWithCSS', false, true);
+  } catch {
+    /* ignore */
+  }
+}
+
 export function execRich(cmd: string, val?: string): boolean {
   try {
     const doc = document as Document & {
       execCommand(commandId: string, showUI?: boolean, value?: string | boolean): boolean;
     };
+    primeRichCommand(cmd);
     doc.execCommand('styleWithCSS', false, true);
     return doc.execCommand(cmd, false, val);
   } catch {

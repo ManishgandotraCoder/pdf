@@ -3,14 +3,17 @@ import {
   Component,
   computed,
   effect,
+  HostListener,
   signal,
   viewChild,
   ElementRef,
   DestroyRef,
   inject,
 } from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
+import { map } from 'rxjs/operators';
 import { ImageCropModalComponent } from './image-crop-modal.component';
 import { RichTextToolbarComponent } from './rich-text-toolbar.component';
 import { InlineEditorComponent } from './inline-editor.component';
@@ -34,6 +37,7 @@ import {
   ImageElement,
   LayoutEditsMap,
   PageData,
+  ProposalSection,
   ResizeHandleId,
   SelElement,
   TableElement,
@@ -59,6 +63,7 @@ import {
   remapPageKeyedStateInsert,
 } from './pdf-design.helpers';
 import { extractPage } from './pdf-extract-page';
+import { PROPOSAL_SECTION_CATALOG } from './proposal-sections.catalog';
 import { ensureTableCells, isProbablyHtml } from './rich-text.utils';
 import { PdfsApiService } from './pdfs-api.service';
 
@@ -85,6 +90,21 @@ export class PdfDesignExtractorComponent {
   private readonly pdfsApi = inject(PdfsApiService);
   private openedPdfId: string | null = null;
 
+  /** Read-only preview tab: hides editor chrome (see `?preview=1`). */
+  readonly previewMode = toSignal(
+    this.route.queryParamMap.pipe(map((m) => m.get('preview') === '1')),
+    { initialValue: this.route.snapshot.queryParamMap.get('preview') === '1' },
+  );
+
+  /** Ordered sections shown in the left sidebar (proposal outline). */
+  readonly proposalSections = signal<ProposalSection[]>([]);
+  readonly addSectionModalOpen = signal(false);
+  readonly sectionModalDraft = signal<ProposalSection[]>([]);
+  readonly exportMenuOpen = signal(false);
+  private sectionDragKey: string | null = null;
+
+  readonly sectionCatalog = PROPOSAL_SECTION_CATALOG;
+
   readonly pages = signal<PageData[]>([]);
   readonly loading = signal(false);
   readonly progress = signal(0);
@@ -96,6 +116,10 @@ export class PdfDesignExtractorComponent {
   readonly edits = signal<EditsMap>({});
   readonly imageEdits = signal<ImageEditsMap>({});
   readonly layoutEdits = signal<LayoutEditsMap>({});
+  /** Right panel: structural tools vs saved assets (placeholder for asset pipeline). */
+  readonly inspectorTab = signal<'elements' | 'assets'>('elements');
+  /** Proposal workflow (local UI state until backend wiring exists). */
+  readonly approvalStatus = signal<'draft' | 'in_review'>('draft');
   readonly addedImages = signal<AddedImagesMap>({});
   readonly addedVideos = signal<AddedVideosMap>({});
   readonly addedTables = signal<AddedTablesMap>({});
@@ -132,6 +156,14 @@ export class PdfDesignExtractorComponent {
     const p = this.pages();
     const i = this.selPage();
     return p[i] ?? null;
+  });
+
+  private readonly previewEffect = effect(() => {
+    if (this.previewMode()) {
+      this.editorMode.set('view');
+      this.selEl.set(null);
+      this.editingId.set(null);
+    }
   });
 
   constructor() {
@@ -535,6 +567,7 @@ export class PdfDesignExtractorComponent {
         addedVideos: AddedVideosMap;
         addedTables: AddedTablesMap;
         addedRichTexts: AddedRichTextsMap;
+        proposalSections: ProposalSection[];
         selPage: number;
         zoom: number;
         editorMode: 'edit' | 'view';
@@ -542,6 +575,7 @@ export class PdfDesignExtractorComponent {
       }>;
 
       if (s.tokens) this.tokens.set(s.tokens);
+      if (Array.isArray(s.proposalSections)) this.proposalSections.set(s.proposalSections);
       if (s.edits) this.edits.set(s.edits);
       if (s.imageEdits) this.imageEdits.set(s.imageEdits);
       if (s.layoutEdits) this.layoutEdits.set(s.layoutEdits);
@@ -579,6 +613,7 @@ export class PdfDesignExtractorComponent {
       addedVideos: structuredClone(this.addedVideos()),
       addedTables: structuredClone(this.addedTables()),
       addedRichTexts: structuredClone(this.addedRichTexts()),
+      proposalSections: structuredClone(this.proposalSections()),
       selPage: this.selPage(),
       zoom: this.zoom(),
       editorMode: this.editorMode(),
@@ -1165,6 +1200,35 @@ export class PdfDesignExtractorComponent {
       (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
       return;
     }
+    if (el.type === 'text') {
+      e.stopPropagation();
+      const pg = this.pages()[this.selPage()];
+      if (!pg) return;
+      const pn = pg.pageNum;
+      const ob = this.overlayBounds(el);
+      const { x: px, y: py } = this.clientToPageCoords(e.clientX, e.clientY);
+      this.imageDrag = {
+        pointerId: e.pointerId,
+        elId: el.id,
+        pn,
+        mediaKind: 'text',
+        grabDx: px - ob.x,
+        grabDy: py - ob.y,
+        pw: pg.width,
+        ph: pg.height,
+        elW: ob.w,
+        elH: ob.h,
+        startPx: px,
+        startPy: py,
+        latestNX: ob.x,
+        latestNY: ob.y,
+        moved: false,
+        captured: false,
+      };
+      this.draggingImageId.set(el.id);
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+      return;
+    }
     if (el.type !== 'image') return;
     const pg = this.pages()[this.selPage()];
     if (!pg) return;
@@ -1267,6 +1331,24 @@ export class PdfDesignExtractorComponent {
       }));
       this.selEl.update((prev) =>
         prev && prev.id === d.elId && prev.type === 'userText' ? { ...prev, x: nx, y: ny } : prev,
+      );
+      return;
+    }
+
+    if (d.mediaKind === 'text') {
+      this.layoutEdits.update((prev) => ({
+        ...prev,
+        [d.pn]: {
+          ...(prev[d.pn] || {}),
+          [d.elId]: {
+            ...(prev[d.pn]?.[d.elId] || {}),
+            x: nx,
+            y: ny,
+          },
+        },
+      }));
+      this.selEl.update((prev) =>
+        prev && prev.id === d.elId && prev.type === 'text' ? { ...prev, x: nx, y: ny } : prev,
       );
       return;
     }
@@ -1380,6 +1462,7 @@ export class PdfDesignExtractorComponent {
     this.addedVideos.set({});
     this.addedTables.set({});
     this.addedRichTexts.set({});
+    this.proposalSections.set([]);
     this.historyStack = [];
     this.redoStack = [];
     this.historyUi.update((u) => u + 1);
@@ -1471,6 +1554,72 @@ export class PdfDesignExtractorComponent {
   clearAllEdits(): void {
     this.captureBeforeChange();
     this.edits.set({});
+  }
+
+  /** Clears text edits, layout overrides, image edits, and user-placed content on all pages. */
+  clearAllCanvasEdits(): void {
+    if (
+      !confirm(
+        'Clear all edits on every page? This removes text changes, layout moves, image replacements, and placed images, videos, tables, and text blocks. Undo is available.',
+      )
+    ) {
+      return;
+    }
+    (Object.values(this.addedVideos()) as VideoElement[][]).forEach((arr: VideoElement[]) =>
+      arr.forEach((v: VideoElement) => {
+        if (v?.src?.startsWith('blob:')) URL.revokeObjectURL(v.src);
+      }),
+    );
+    this.captureBeforeChange();
+    this.edits.set({});
+    this.imageEdits.set({});
+    this.layoutEdits.set({});
+    this.addedImages.set({});
+    this.addedVideos.set({});
+    this.addedTables.set({});
+    this.addedRichTexts.set({});
+    this.selEl.set(null);
+    this.editingId.set(null);
+    this.historyUi.update((u) => u + 1);
+  }
+
+  sendForApproval(): void {
+    this.approvalStatus.set('in_review');
+  }
+
+  overlayElementTitle(el: SelElement): string {
+    switch (el.type) {
+      case 'text':
+        return 'Text — Select · drag to move · double-click to edit';
+      case 'image':
+        return 'Image — Drag to move, handles to resize';
+      case 'video':
+        return 'Video — Drag to move';
+      case 'shape':
+        return 'Vector shape';
+      default:
+        return '';
+    }
+  }
+
+  onOverlayTextReset(e: Event, el: SelElement): void {
+    e.stopPropagation();
+    e.preventDefault();
+    if (el.type !== 'text') return;
+    const pg = this.pg();
+    if (!pg) return;
+    this.captureBeforeChange();
+    this.edits.update((prev) => {
+      const pgEdits = { ...(prev[pg.pageNum] || {}) };
+      delete pgEdits[el.id];
+      return { ...prev, [pg.pageNum]: pgEdits };
+    });
+    this.layoutEdits.update((prev) => {
+      const le = { ...(prev[pg.pageNum] || {}) };
+      delete le[el.id];
+      return { ...prev, [pg.pageNum]: le };
+    });
+    this.selEl.set(null);
   }
 
   editingTextEl(): TextElement | null {
@@ -1722,6 +1871,185 @@ export class PdfDesignExtractorComponent {
       }
     }
     return out;
+  }
+
+  openAddSectionModal(): void {
+    this.sectionModalDraft.set(structuredClone(this.proposalSections()));
+    this.addSectionModalOpen.set(true);
+  }
+
+  closeAddSectionModal(): void {
+    this.addSectionModalOpen.set(false);
+  }
+
+  saveAddSectionModal(): void {
+    this.captureBeforeChange();
+    this.proposalSections.set(structuredClone(this.sectionModalDraft()));
+    this.addSectionModalOpen.set(false);
+  }
+
+  addCatalogSectionToModal(catalogId: string, title: string): void {
+    const exists = this.sectionModalDraft().some((s) => s.catalogId === catalogId);
+    if (exists) return;
+    const row: ProposalSection = {
+      id: `sec_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      catalogId,
+      title,
+    };
+    this.sectionModalDraft.update((list) => [...list, row]);
+  }
+
+  removeSectionFromModal(id: string): void {
+    this.sectionModalDraft.update((list) => list.filter((s) => s.id !== id));
+  }
+
+  onSectionDragStart(e: DragEvent, id: string): void {
+    this.sectionDragKey = id;
+    e.dataTransfer?.setData('text/plain', id);
+    e.dataTransfer!.effectAllowed = 'move';
+  }
+
+  onSectionDragOver(e: DragEvent): void {
+    e.preventDefault();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+  }
+
+  onSectionDrop(e: DragEvent, targetId: string): void {
+    e.preventDefault();
+    const from = this.sectionDragKey || e.dataTransfer?.getData('text/plain');
+    this.sectionDragKey = null;
+    if (!from || from === targetId) return;
+    this.sectionModalDraft.update((list) => {
+      const i = list.findIndex((x) => x.id === from);
+      const j = list.findIndex((x) => x.id === targetId);
+      if (i < 0 || j < 0) return list;
+      const n = [...list];
+      const [item] = n.splice(i, 1);
+      n.splice(j, 0, item);
+      return n;
+    });
+  }
+
+  openLivePreview(): void {
+    const pdfId = this.openedPdfId;
+    if (!pdfId || !this.pages().length) {
+      alert('Save your proposal to the server first, then use Live preview (opens the saved document in a new tab).');
+      return;
+    }
+    const url = this.router.serializeUrl(
+      this.router.createUrlTree(['/edit', pdfId], { queryParams: { preview: '1' } }),
+    );
+    window.open(url, '_blank', 'noopener,noreferrer');
+  }
+
+  closePreview(): void {
+    const id = this.openedPdfId;
+    if (id) void this.router.navigate(['/edit', id], { queryParams: {} });
+    else void this.router.navigate(['/edit'], { queryParams: {} });
+  }
+
+  toggleExportMenu(): void {
+    this.exportMenuOpen.update((v) => !v);
+  }
+
+  closeExportMenu(): void {
+    this.exportMenuOpen.set(false);
+  }
+
+  private sanitizeFilename(name: string): string {
+    const s = name.replace(/[/\\?%*:|"<>]/g, '_').trim();
+    return s.slice(0, 120) || 'proposal';
+  }
+
+  private downloadBlob(blob: Blob, filename: string): void {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    a.click();
+    queueMicrotask(() => URL.revokeObjectURL(a.href));
+  }
+
+  private escapeHtml(s: string): string {
+    return s
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  private buildWordExportHtml(): string {
+    const title = this.pdfTitle() || 'Proposal';
+    const sections = this.proposalSections();
+    const secList = sections.map((x) => `<li>${this.escapeHtml(x.title)}</li>`).join('');
+    const n = this.pages().length;
+    return `<!DOCTYPE html><html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word"><head><meta charset="utf-8"><title>${this.escapeHtml(title)}</title></head><body><h1>${this.escapeHtml(title)}</h1><p>Pages: ${n}</p><h2>Sections</h2><ul>${secList || '<li>(none)</li>'}</ul><p><em>Exported from Proposal Editor. Visual canvas edits are not baked into this file.</em></p></body></html>`;
+  }
+
+  async exportPdfFile(): Promise<void> {
+    this.closeExportMenu();
+    const id = this.openedPdfId;
+    if (!id) {
+      alert('Save your proposal to the server first to download the original PDF file.');
+      return;
+    }
+    try {
+      const buf = await firstValueFrom(this.pdfsApi.getPdfFile(id));
+      const blob = new Blob([buf], { type: 'application/pdf' });
+      this.downloadBlob(blob, `${this.sanitizeFilename(this.pdfTitle())}.pdf`);
+    } catch (e: unknown) {
+      alert('Download failed: ' + (e instanceof Error ? e.message : String(e)));
+    }
+  }
+
+  exportWordFile(): void {
+    this.closeExportMenu();
+    const blob = new Blob([`\ufeff${this.buildWordExportHtml()}`], {
+      type: 'application/msword',
+    });
+    this.downloadBlob(blob, `${this.sanitizeFilename(this.pdfTitle())}.doc`);
+  }
+
+  async exportPptxFile(): Promise<void> {
+    this.closeExportMenu();
+    try {
+      const pptxgen = (await import('pptxgenjs')).default;
+      const pptx = new pptxgen();
+      pptx.title = this.pdfTitle() || 'Proposal';
+      const s1 = pptx.addSlide();
+      s1.addText(this.pdfTitle() || 'Proposal', {
+        x: 0.5,
+        y: 1.2,
+        w: 9,
+        fontSize: 28,
+        bold: true,
+        color: '0f172a',
+      });
+      const secLines = this.proposalSections();
+      const bulletParts =
+        secLines.length > 0
+          ? secLines.map((s) => ({ text: s.title, options: { bullet: true as const } }))
+          : [{ text: 'Add sections from the editor', options: { bullet: true as const } }];
+      s1.addText(bulletParts, { x: 0.6, y: 2.4, w: 8.8, fontSize: 14, color: '334155' });
+      const s2 = pptx.addSlide();
+      s2.addText(`Document pages: ${this.pages().length}`, { x: 0.5, y: 1, fontSize: 20, bold: true });
+      s2.addText('This export is a summary deck. For pixel-perfect pages, export PDF.', {
+        x: 0.5,
+        y: 1.8,
+        w: 9,
+        fontSize: 12,
+        color: '64748b',
+      });
+      await pptx.writeFile({ fileName: `${this.sanitizeFilename(this.pdfTitle())}.pptx` });
+    } catch (e: unknown) {
+      alert('PPTX export failed: ' + (e instanceof Error ? e.message : String(e)));
+    }
+  }
+
+  @HostListener('document:click', ['$event'])
+  onDocumentClick(ev: MouseEvent): void {
+    const t = ev.target as HTMLElement;
+    if (t.closest('[data-export-menu]')) return;
+    this.exportMenuOpen.set(false);
   }
 
   goBackToList(): void {

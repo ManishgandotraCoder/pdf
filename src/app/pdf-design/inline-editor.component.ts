@@ -35,8 +35,25 @@ export class InlineEditorComponent implements AfterViewInit {
     const r = this.editable()?.nativeElement;
     if (!r) return;
     const raw = this.initialValue() ?? '';
-    if (isProbablyHtml(raw)) r.innerHTML = raw;
-    else r.textContent = raw;
+    const el = this.el();
+    if (isProbablyHtml(raw)) {
+      r.innerHTML = raw;
+    } else {
+      const p = document.createElement('p');
+      p.style.margin = '0';
+      p.style.font = 'inherit';
+      p.style.whiteSpace = 'pre-wrap';
+      p.textContent = raw;
+      r.innerHTML = '';
+      r.appendChild(p);
+    }
+    r.style.fontFamily = el.style.fontFamily || 'sans-serif';
+    if (el.style.fontSizePx != null) {
+      r.style.fontSize = `${el.style.fontSizePx}px`;
+    }
+    r.style.fontWeight = el.style.fontWeight || '';
+    r.style.fontStyle = el.style.fontStyle || '';
+    r.style.color = el.style.color || '';
     r.focus();
     // Select all content so the user can immediately replace or refine the selection
     // (paragraph / line selection is then one Shift+End / Shift+Home away)

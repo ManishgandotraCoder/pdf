@@ -134,6 +134,13 @@ export interface DesignTokens {
   sizes: number[];
 }
 
+/** Ordered section entry shown in the left “Proposal sections” list. */
+export interface ProposalSection {
+  id: string;
+  catalogId: string;
+  title: string;
+}
+
 export interface HistorySnapshot {
   edits: EditsMap;
   imageEdits: ImageEditsMap;
