@@ -14,35 +14,19 @@
       }
     </select>
     <input
-      type="number"
+      type="text"
+      inputmode="numeric"
       class="rt-size-input"
-      title="Font size (px) — any value 1–999"
-      min="1"
-      max="999"
-      step="1"
+      title="Font size (px) — type any value"
       [disabled]="disabled()"
-      [value]="selectionSizePx() ?? ''"
+      [value]="sizeInputModel()"
+      (focus)="onSizeInputFocus()"
+      (input)="onSizeInput($event)"
+      (keydown)="onSizeInputKeydown($event)"
+      (blur)="onSizeInputBlur()"
       (change)="onSizeInputCommit($event)"
       (mousedown)="$event.stopPropagation()"
-      list="rt-font-size-presets"
     />
-    <datalist id="rt-font-size-presets">
-      @for (sz of sizes; track sz) {
-        <option [value]="sz"></option>
-      }
-    </datalist>
-    <select
-      class="rt-select rt-select--narrow"
-      title="Quick size presets"
-      [disabled]="disabled()"
-      [value]="sizePresetModel()"
-      (change)="onSizeChange($event)"
-    >
-      <option value="">Presets</option>
-      @for (sz of sizes; track sz) {
-        <option [value]="'' + sz">{{ sz }}px</option>
-      }
-    </select>
     @if (selectionFontLabel()) {
       <span class="rt-toolbar-current" [title]="selectionFontLabel() + ' · ' + (selectionSizePx() ?? '?') + 'px'">
         {{ selectionFontLabel() }} · {{ selectionSizePx() ?? '—' }}px

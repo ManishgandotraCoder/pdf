@@ -5,7 +5,6 @@ import {
   execRich,
   execRichList,
   expandToAllIfCollapsed,
-  FONT_SIZE_PX_LIST,
   getRichTextSelectionFontInfo,
   mergeFontOptions,
   promptLinkUrl,
@@ -29,6 +28,8 @@ export class RichTextToolbarComponent {
   /** Reflects the active selection so font/size are visible after applying styles. */
   readonly selectionFontLabel = signal('');
   readonly selectionSizePx = signal<number | null>(null);
+  readonly isEditingSize = signal(false);
+  readonly sizeDraft = signal('');
 
   constructor() {
     this.host.nativeElement.addEventListener(
@@ -47,6 +48,7 @@ export class RichTextToolbarComponent {
 
   private scheduleSyncFromSelection(): void {
     if (this.disabled()) return;
+    if (this.isEditingSize()) return;
     if (this.syncTimer) clearTimeout(this.syncTimer);
     this.syncTimer = setTimeout(() => {
       this.syncTimer = null;
@@ -56,6 +58,7 @@ export class RichTextToolbarComponent {
 
   private syncFromSelection(): void {
     if (this.disabled()) return;
+    if (this.isEditingSize()) return;
     const info = getRichTextSelectionFontInfo();
     if (!info) return;
     this.selectionFontLabel.set(info.fontFamily);
@@ -97,11 +100,45 @@ export class RichTextToolbarComponent {
     return hit ?? raw;
   }
 
-  /** Value bound to the size preset dropdown when it matches a preset, else empty. */
-  sizePresetModel(): string {
+  sizeInputModel(): string {
+    if (this.isEditingSize()) return this.sizeDraft();
     const px = this.selectionSizePx();
-    if (px == null) return '';
-    return FONT_SIZE_PX_LIST.includes(px) ? String(px) : '';
+    return px == null ? '' : String(px);
+  }
+
+  onSizeInputFocus(): void {
+    if (this.disabled()) return;
+    this.isEditingSize.set(true);
+    // Seed the draft so typing starts from current value, but do not force it if already set.
+    if (!this.sizeDraft()) this.sizeDraft.set(this.sizeInputModel());
+  }
+
+  onSizeInput(e: Event): void {
+    if (this.disabled()) return;
+    this.sizeDraft.set((e.target as HTMLInputElement).value);
+  }
+
+  onSizeInputKeydown(e: KeyboardEvent): void {
+    if (this.disabled()) return;
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      this.onSizeInputCommit(e);
+      (e.target as HTMLInputElement).blur();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      this.sizeDraft.set('');
+      this.isEditingSize.set(false);
+      (e.target as HTMLInputElement).blur();
+      this.syncFromSelectionSoon();
+    }
+  }
+
+  onSizeInputBlur(): void {
+    if (this.disabled()) return;
+    // `change` will also fire on blur, but blur should always end editing mode.
+    this.isEditingSize.set(false);
+    this.sizeDraft.set('');
+    this.syncFromSelectionSoon();
   }
 
   onFontChange(e: Event): void {
@@ -115,23 +152,11 @@ export class RichTextToolbarComponent {
     this.syncFromSelectionSoon();
   }
 
-  onSizeChange(e: Event): void {
-    const sel = e.target as HTMLSelectElement;
-    const v = sel.value;
-    if (v) {
-      restoreRichTextSelection();
-      expandToAllIfCollapsed();
-      applyFontSizePx(v);
-      saveRichTextSelection();
-    }
-    this.syncFromSelectionSoon();
-  }
-
   onSizeInputCommit(e: Event): void {
     if (this.disabled()) return;
-    const raw = (e.target as HTMLInputElement).value;
+    const raw = (e.target as HTMLInputElement).value.trim();
     const n = Number.parseInt(raw, 10);
-    if (!Number.isFinite(n) || n < 1 || n > 999) return;
+    if (!Number.isFinite(n) || n < 1) return;
     restoreRichTextSelection();
     expandToAllIfCollapsed();
     applyFontSizePx(n);
@@ -188,6 +213,4 @@ export class RichTextToolbarComponent {
     if (this.disabled()) return;
     promptLinkUrl();
   }
-
-  readonly sizes = FONT_SIZE_PX_LIST;
 }
