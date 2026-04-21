@@ -1,4 +1,4 @@
-import { Component, ElementRef, inject, input, NgZone, signal } from '@angular/core';
+import { Component, DestroyRef, ElementRef, inject, input, NgZone, signal } from '@angular/core';
 
 import {
   applyFontSizePx,
@@ -20,6 +20,7 @@ import {
 export class RichTextToolbarComponent {
   private readonly host = inject(ElementRef<HTMLElement>);
   private readonly zone = inject(NgZone);
+  private readonly destroyRef = inject(DestroyRef);
   private syncTimer: ReturnType<typeof setTimeout> | null = null;
 
   readonly disabled = input(false);
@@ -32,17 +33,21 @@ export class RichTextToolbarComponent {
   readonly sizeDraft = signal('');
 
   constructor() {
-    this.host.nativeElement.addEventListener(
-      'mousedown',
-      () => {
-        if (!this.disabled()) saveRichTextSelection();
-      },
-      { capture: true },
-    );
+    const hostEl = this.host.nativeElement;
+    const onHostMouseDown = () => {
+      if (!this.disabled()) saveRichTextSelection();
+    };
+    this.zone.runOutsideAngular(() => {
+      hostEl.addEventListener('mousedown', onHostMouseDown, { capture: true });
+    });
+    this.destroyRef.onDestroy(() => hostEl.removeEventListener('mousedown', onHostMouseDown, { capture: true } as any));
+
     if (typeof document !== 'undefined') {
-      document.addEventListener('selectionchange', () => {
-        this.zone.run(() => this.scheduleSyncFromSelection());
+      const onSel = () => this.zone.run(() => this.scheduleSyncFromSelection());
+      this.zone.runOutsideAngular(() => {
+        document.addEventListener('selectionchange', onSel, { passive: true } as any);
       });
+      this.destroyRef.onDestroy(() => document.removeEventListener('selectionchange', onSel as any));
     }
   }
 

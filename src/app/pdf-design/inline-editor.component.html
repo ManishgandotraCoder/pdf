@@ -1,5 +1,6 @@
 <div
   data-rich-toolbar
+  #toolbarWrap
   style="
     position: absolute;
     z-index: 50;
@@ -10,7 +11,7 @@
     gap: 8px;
     box-sizing: border-box;
   "
-  [style.left.px]="el().x - 1"
+  [style.left.px]="toolbarLeft()"
   [style.top.px]="toolbarTop()"
   [style.width.px]="minMaxW()"
 >
