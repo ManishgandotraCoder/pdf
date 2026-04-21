@@ -139,6 +139,9 @@ export class PdfDesignExtractorComponent {
 
   readonly pdfTitle = signal<string>('');
 
+  // Always-visible inspector editor draft (even with no selection).
+  readonly inspectorDraftHtml = signal<string>('');
+
   readonly canvasRef = viewChild<ElementRef<HTMLCanvasElement>>('canvas');
   readonly pageStageRef = viewChild<ElementRef<HTMLDivElement>>('pageStage');
   readonly addImageInputRef = viewChild<ElementRef<HTMLInputElement>>('addImageInput');
@@ -165,6 +168,13 @@ export class PdfDesignExtractorComponent {
       this.selEl.set(null);
       this.editingId.set(null);
     }
+  });
+
+  private readonly inspectorDraftSync = effect(() => {
+    const sel = this.selEl();
+    const pg = this.pg();
+    if (!pg || !sel || sel.type !== 'text') return;
+    this.inspectorDraftHtml.set(this.textEditOrOriginal(sel.id, sel.content));
   });
 
   constructor() {
@@ -1837,6 +1847,13 @@ export class PdfDesignExtractorComponent {
   onInspectorTextHtml(html: string, pageNum: number, id: string): void {
     if (this.editorMode() !== 'edit') this.editorMode.set('edit');
     this.setEdit(pageNum, id, html);
+  }
+
+  onInspectorDraftHtml(html: string, pageNum: number): void {
+    this.inspectorDraftHtml.set(html);
+    const sel = this.selEl();
+    if (!sel || sel.type !== 'text') return;
+    this.onInspectorTextHtml(html, pageNum, sel.id);
   }
 
   clampNum(e: Event, min: number, max: number): number {

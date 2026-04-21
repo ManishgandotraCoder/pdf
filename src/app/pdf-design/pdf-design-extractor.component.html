@@ -204,34 +204,34 @@
         review</span>
       }
       <button type="button" (click)="sendForApproval()" [disabled]="approvalStatus() === 'in_review'" style="
-            padding: 6px 12px;
+            padding: 10px 14px;
             border-radius: 8px;
-            font-size: 11px;
+            font-size: 12px;
             font-weight: 700;
             cursor: pointer;
-            border: 1px solid rgba(99, 102, 241, 0.45);
-            background: rgba(99, 102, 241, 0.12);
-            color: #4338ca;
+            border: 1px solid #4338ca;
+            color: white;
+            background: #4338ca;
           " [style.opacity]="approvalStatus() === 'in_review' ? 0.5 : 1"
         [style.cursor]="approvalStatus() === 'in_review' ? 'not-allowed' : 'pointer'"
         title="Submit for internal approval (status becomes In review)">
         Send for approval
       </button>
       <button type="button" (click)="clearAllCanvasEdits()" style="
-            padding: 6px 10px;
+           padding: 10px 14px;
             border-radius: 8px;
             font-size: 11px;
             font-weight: 600;
             cursor: pointer;
-            border: 1px solid rgba(185, 28, 28, 0.35);
-            background: rgba(254, 242, 242, 0.9);
-            color: #b91c1c;
+            border: 1px solid #b91c1c;
+            color: white;
+            background: #b91c1c;
           " title="Remove all edits and placed content on every page">
         Clear all edits
       </button>
       <div class="topbar__divider"></div>
       <button type="button" (click)="newDocument()" style="
-            padding: 5px 9px;
+            padding: 10px 14px;
             background: rgba(42, 172, 184, 0.1);
             color: #0f766e;
             border: 1px solid rgba(42, 172, 184, 0.35);
@@ -243,7 +243,7 @@
         New
       </button>
       <button type="button" (click)="saveEdits()" style="
-            padding: 5px 9px;
+            padding: 10px 14px;
             background: rgba(15, 118, 110, 0.08);
             color: #0f766e;
             border: 1px solid rgba(15, 118, 110, 0.25);
@@ -256,6 +256,18 @@
       </button>
       }
     </div>
+
+    <!-- Inline text editor block (always visible) -->
+    <div
+      style="padding: 0.65rem 1.1rem; background: var(--surface-elevated); border-bottom: 1px solid var(--border-hairline)">
+      <app-rich-text-editor-block
+        [html]="inspectorDraftHtml()"
+        (htmlChange)="onInspectorDraftHtml($event, pgv.pageNum)"
+        [disabled]="editorMode() === 'view'"
+        [fontChoices]="tokens().fonts"
+        [minHeight]="96" />
+    </div>
+
 
     <div class="canvas-scroll" [class.canvas-scroll--drop]="viewerImageDropActive()" (click)="onStageClick()"
       (dragover)="handleViewerDragOver($event)" (dragenter)="handleViewerDragEnter($event)"
@@ -949,9 +961,7 @@
                 ">
           Edit Text
         </div>
-        <app-rich-text-editor-block [html]="textEditOrOriginal(sel.id, sel.content)"
-          (htmlChange)="onInspectorTextHtml($event, pgv.pageNum, sel.id)" [disabled]="editorMode() === 'view'"
-          [fontChoices]="tokens().fonts" [minHeight]="96" />
+        <!-- moved to below-topbar block -->
         <div style="display: flex; gap: 6px; margin-top: 8px">
           <button type="button" (click)="setEdit(pgv.pageNum, sel.id, sel.content, 'commit')" style="
                     flex: 1;
@@ -1013,48 +1023,6 @@
           <div style="font-size: 11px; color: #666; word-break: break-word">{{ sel.content }}</div>
         </div>
         }
-      </div>
-      }
-
-      @if (sel.type === 'userText' && userTextForInspector(); as ut) {
-      <div style="margin-bottom: 18px">
-        <div style="
-                  font-size: 9px;
-                  color: #64748b;
-                  letter-spacing: 1.5px;
-                  text-transform: uppercase;
-                  font-weight: 700;
-                  margin-bottom: 8px;
-                  padding-bottom: 5px;
-                  border-bottom: 1px solid #e8ecf0;
-                ">
-          Placed text
-        </div>
-        @if (editorMode() === 'edit') {
-        }
-        <app-rich-text-editor-block [html]="ut.html"
-          (htmlChange)="editorMode.set('edit'); updateUserTextHtml(sel.id, $event)" [disabled]="editorMode() === 'view'"
-          [fontChoices]="tokens().fonts" [minHeight]="120" />
-        <button type="button" (click)="removeUserTextInspector(sel)" style="
-                  width: 100%;
-                  padding: 8px 10px;
-                  background: #fef2f2;
-                  color: #b91c1c;
-                  border: 1px solid #fecaca;
-                  border-radius: 6px;
-                  font-size: 11px;
-                  cursor: pointer;
-                  display: flex;
-                  align-items: center;
-                  justify-content: center;
-                  gap: 8px;
-                ">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-            stroke-linecap="round" aria-hidden="true">
-            <path d="M18 6L6 18M6 6l12 12" />
-          </svg>
-          Remove from page
-        </button>
       </div>
       }
 

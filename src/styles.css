@@ -296,11 +296,11 @@ select:focus-visible {
 
 .badge-edits {
   font-size: 0.625rem;
-  background: rgba(245, 158, 11, 0.14);
-  color: #d97706;
+  background: #b45309;
+  color: #ffffff;
   padding: 0.2rem 0.5rem;
   border-radius: 999px;
-  border: 1px solid rgba(245, 158, 11, 0.28);
+  border: 1px solid #b45309;
   font-weight: 600;
 }
 
@@ -424,13 +424,13 @@ select:focus-visible {
   align-items: center;
   gap: 8px 10px;
   margin-bottom: 8px;
-  padding: 10px 11px 11px;
-  background:
-    linear-gradient(145deg, rgba(99, 102, 241, 0.04) 0%, transparent 45%),
-    linear-gradient(180deg, #fcfdfe 0%, var(--surface-muted) 100%);
-  border: 1px solid var(--border-hairline);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-xs);
+  padding: 10px 12px;
+  background: var(--surface-elevated);
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 14px;
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.06),
+    0 10px 28px rgba(15, 23, 42, 0.06);
 }
 
 .rich-text-toolbar-wrap fieldset.rt-toolbar__group {
@@ -461,17 +461,18 @@ select:focus-visible {
 .rich-text-toolbar-wrap .rt-toolbar__group:not(:first-child) {
   padding-left: 10px;
   margin-left: 2px;
-  border-left: 1px solid rgba(15, 23, 42, 0.08);
+  border-left: 1px solid rgba(15, 23, 42, 0.07);
 }
 
 .rich-text-toolbar-wrap .rt-select {
-  font-size: 11px;
-  font-weight: 500;
-  padding: 6px 28px 6px 9px;
+  height: 36px;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 0 30px 0 12px;
   max-width: 148px;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border-default);
-  background-color: var(--surface-elevated);
+  border-radius: 10px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  background-color: rgba(15, 23, 42, 0.04);
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 7px center;
@@ -481,17 +482,19 @@ select:focus-visible {
   -webkit-appearance: none;
   transition:
     border-color 0.15s,
+    background 0.15s,
     box-shadow 0.15s;
 }
 
 .rich-text-toolbar-wrap .rt-select:hover:not(:disabled) {
-  border-color: rgba(13, 148, 136, 0.35);
+  border-color: rgba(13, 148, 136, 0.28);
+  background: rgba(13, 148, 136, 0.07);
 }
 
 .rich-text-toolbar-wrap .rt-select:focus {
   outline: none;
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-soft);
+  border-color: rgba(13, 148, 136, 0.55);
+  box-shadow: 0 0 0 4px rgba(13, 148, 136, 0.18);
 }
 
 .rich-text-toolbar-wrap .rt-select:disabled {
@@ -507,20 +510,21 @@ select:focus-visible {
 
 .rich-text-toolbar-wrap .rt-size-input {
   width: 56px;
-  font-size: 11px;
+  height: 36px;
+  font-size: 12px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
-  padding: 6px 8px;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border-default);
-  background: var(--surface-elevated);
+  padding: 0 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  background: rgba(15, 23, 42, 0.04);
   color: var(--text-primary);
 }
 
 .rich-text-toolbar-wrap .rt-size-input:focus {
   outline: none;
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-soft);
+  border-color: rgba(13, 148, 136, 0.55);
+  box-shadow: 0 0 0 4px rgba(13, 148, 136, 0.18);
 }
 
 .rich-text-toolbar-wrap .rt-toolbar-current {
@@ -531,10 +535,10 @@ select:focus-visible {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  padding: 4px 6px;
-  border-radius: var(--radius-sm);
-  background: rgba(13, 148, 136, 0.08);
-  border: 1px solid rgba(13, 148, 136, 0.2);
+  padding: 7px 10px;
+  border-radius: 999px;
+  background: rgba(13, 148, 136, 0.1);
+  border: 1px solid rgba(13, 148, 136, 0.18);
 }
 
 .rich-text-toolbar-wrap .rt-swatch-label {
@@ -555,12 +559,12 @@ select:focus-visible {
 }
 
 .rich-text-toolbar-wrap .rt-color-input {
-  width: 30px;
-  height: 26px;
+  width: 36px;
+  height: 36px;
   padding: 2px;
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-sm);
-  background: var(--surface-elevated);
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.04);
   cursor: pointer;
   box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.05);
   transition:
@@ -588,27 +592,31 @@ select:focus-visible {
   align-items: center;
   justify-content: center;
   gap: 5px;
-  padding: 6px 9px;
-  font-size: 11px;
+  height: 36px;
+  padding: 0 12px;
+  font-size: 12px;
   font-weight: 600;
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-sm);
-  background: linear-gradient(180deg, #ffffff 0%, var(--surface-subtle) 100%);
-  color: var(--text-secondary);
-  min-height: 30px;
-  min-width: 30px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.04);
+  color: var(--text-primary);
+  min-width: 36px;
   cursor: pointer;
+  position: relative;
+  overflow: hidden;
   transition:
-    background 0.14s,
-    border-color 0.14s,
-    color 0.14s,
-    box-shadow 0.14s,
-    transform 0.1s;
+    background 0.14s ease,
+    border-color 0.14s ease,
+    color 0.14s ease,
+    box-shadow 0.14s ease,
+    transform 0.08s ease;
 }
 
 .rich-text-toolbar-wrap .rt-btn--icon {
-  padding: 6px;
-  color: var(--text-muted);
+  width: 36px;
+  padding: 0;
+  color: rgba(15, 23, 42, 0.6);
+  border-radius: 999px;
 }
 
 .rich-text-toolbar-wrap .rt-btn--with-icon {
@@ -617,10 +625,10 @@ select:focus-visible {
 }
 
 .rich-text-toolbar-wrap .rt-btn:hover:not(:disabled) {
-  background: linear-gradient(180deg, #ffffff 0%, #eef2f7 100%);
-  border-color: rgba(13, 148, 136, 0.28);
+  background: rgba(13, 148, 136, 0.09);
+  border-color: rgba(13, 148, 136, 0.22);
   color: var(--text-primary);
-  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
 }
 
 .rich-text-toolbar-wrap .rt-btn:hover:not(:disabled) .rt-icon {
@@ -629,6 +637,47 @@ select:focus-visible {
 
 .rich-text-toolbar-wrap .rt-btn:active:not(:disabled) {
   transform: translateY(1px);
+}
+
+.rich-text-toolbar-wrap .rt-btn:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 4px rgba(13, 148, 136, 0.18),
+    0 1px 2px rgba(15, 23, 42, 0.06);
+  border-color: rgba(13, 148, 136, 0.35);
+}
+
+/* Simple CSS ripple (press) */
+@keyframes rt-ripple {
+  0% {
+    transform: translate(-50%, -50%) scale(0.2);
+    opacity: 0.0;
+  }
+  25% {
+    opacity: 0.35;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1.55);
+    opacity: 0;
+  }
+}
+
+.rich-text-toolbar-wrap .rt-btn::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 140px;
+  height: 140px;
+  border-radius: 999px;
+  background: radial-gradient(circle, rgba(13, 148, 136, 0.35) 0%, rgba(13, 148, 136, 0.0) 60%);
+  transform: translate(-50%, -50%) scale(0.2);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.rich-text-toolbar-wrap .rt-btn:active::after {
+  animation: rt-ripple 520ms ease-out;
 }
 
 .rich-text-toolbar-wrap .rt-btn:disabled {
