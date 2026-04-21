@@ -1,10 +1,15 @@
 import { TestBed } from '@angular/core/testing';
+import { provideRouter } from '@angular/router';
+import { RouterTestingHarness } from '@angular/router/testing';
 import { App } from './app';
+import { routes } from './app.routes';
+import { PdfDesignExtractorComponent } from './pdf-design/pdf-design-extractor.component';
 
 describe('App', () => {
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       imports: [App],
+      providers: [provideRouter(routes)],
     }).compileComponents();
   });
 
@@ -15,10 +20,8 @@ describe('App', () => {
   });
 
   it('should render the PDF design extractor', async () => {
-    const fixture = TestBed.createComponent(App);
-    fixture.detectChanges();
-    await fixture.whenStable();
-    const compiled = fixture.nativeElement as HTMLElement;
-    expect(compiled.querySelector('app-pdf-design-extractor')).toBeTruthy();
+    const harness = await RouterTestingHarness.create();
+    await harness.navigateByUrl('/edit', PdfDesignExtractorComponent);
+    expect(harness.routeNativeElement?.tagName?.toLowerCase()).toBe('app-pdf-design-extractor');
   });
 });

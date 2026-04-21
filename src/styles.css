@@ -916,3 +916,9 @@ select:focus-visible {
   border-style: solid;
   border-color: #323232 transparent transparent transparent;
 }
+
+/* Shared icon button hover (avoid inline JS in templates). */
+.inspector-icon-btn:hover:not(:disabled) {
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.12) !important;
+  background: #f5f5f5 !important;
+}

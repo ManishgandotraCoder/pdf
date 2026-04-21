@@ -749,11 +749,10 @@
         <div class="tooltip-wrapper">
           <button type="button" title="View — read without selection outlines"
             (click)="editorMode.set('view'); editingId.set(null); selEl.set(null)"
+            class="inspector-icon-btn"
             style="width:40px; height:40px; display:flex; align-items:center; justify-content:center; border-radius:8px; transition:all 0.2s cubic-bezier(0.4,0,0.2,1); background:#fff; box-shadow:0 1px 2px rgba(0,0,0,0.08)"
             [style.border]="'1px solid ' + (editorMode() === 'view' ? '#1976d2' : 'rgba(0,0,0,0.12)')"
-            [style.color]="editorMode() === 'view' ? '#1976d2' : '#4338ca'" [style.cursor]="'pointer'"
-            onmouseover="this.style.boxShadow='0 4px 10px rgba(0,0,0,0.12)'; this.style.background='#f5f5f5'"
-            onmouseout="this.style.boxShadow='0 1px 2px rgba(0,0,0,0.08)'; this.style.background='#fff'">
+            [style.color]="editorMode() === 'view' ? '#1976d2' : '#4338ca'" [style.cursor]="'pointer'">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
               <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z" />
               <circle cx="12" cy="12" r="3" />
@@ -765,11 +764,10 @@
         <!-- EDIT -->
         <div class="tooltip-wrapper">
           <button type="button" title="Edit — select and modify elements" (click)="editorMode.set('edit')"
+            class="inspector-icon-btn"
             style="width:40px; height:40px; display:flex; align-items:center; justify-content:center; border-radius:8px; transition:all 0.2s cubic-bezier(0.4,0,0.2,1); background:#fff; box-shadow:0 1px 2px rgba(0,0,0,0.08)"
             [style.border]="'1px solid ' + (editorMode() === 'edit' ? '#1976d2' : 'rgba(0,0,0,0.12)')"
-            [style.color]="editorMode() === 'edit' ? '#1976d2' : '#0f766e'" [style.cursor]="'pointer'"
-            onmouseover="this.style.boxShadow='0 4px 10px rgba(0,0,0,0.12)'; this.style.background='#f5f5f5'"
-            onmouseout="this.style.boxShadow='0 1px 2px rgba(0,0,0,0.08)'; this.style.background='#fff'">
+            [style.color]="editorMode() === 'edit' ? '#1976d2' : '#0f766e'" [style.cursor]="'pointer'">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
               <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
               <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
@@ -781,10 +779,9 @@
         <!-- ADD PAGE -->
         <div class="tooltip-wrapper">
           <button type="button" title="Add Page (after current)" (click)="addPageAfterCurrent()"
+            class="inspector-icon-btn"
             style="width:40px; height:40px; display:flex; align-items:center; justify-content:center; border-radius:8px; transition:all 0.2s cubic-bezier(0.4,0,0.2,1); background:#fff; box-shadow:0 1px 2px rgba(0,0,0,0.08)"
-            [style.border]="'1px solid rgba(0,0,0,0.12)'" [style.color]="'#0f766e'" [style.cursor]="'pointer'"
-            onmouseover="this.style.boxShadow='0 4px 10px rgba(0,0,0,0.12)'; this.style.background='#f5f5f5'"
-            onmouseout="this.style.boxShadow='0 1px 2px rgba(0,0,0,0.08)'; this.style.background='#fff'">
+            [style.border]="'1px solid rgba(0,0,0,0.12)'" [style.color]="'#0f766e'" [style.cursor]="'pointer'">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
               <path d="M4 3h11l5 5v13a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z" />
               <path d="M12 11v6M9 14h6" />
@@ -798,13 +795,12 @@
           <button type="button" [disabled]="pages().length <= 1"
             [title]="pages().length <= 1 ? 'Cannot delete the only page' : 'Remove current page'"
             (click)="deletePageAtIndex(selPage())"
+            class="inspector-icon-btn"
             style="width:40px; height:40px; display:flex; align-items:center; justify-content:center; border-radius:8px; transition:all 0.2s cubic-bezier(0.4,0,0.2,1); background:#fff; box-shadow:0 1px 2px rgba(0,0,0,0.08)"
             [style.border]="'1px solid ' + (pages().length <= 1 ? '#e2e8f0' : 'rgba(0,0,0,0.12)')"
             [style.color]="pages().length <= 1 ? '#94a3b8' : '#b91c1c'"
             [style.cursor]="pages().length <= 1 ? 'not-allowed' : 'pointer'"
-            [style.opacity]="pages().length <= 1 ? 0.5 : 1"
-            onmouseover="this.style.boxShadow='0 4px 10px rgba(0,0,0,0.12)'; this.style.background='#f5f5f5'"
-            onmouseout="this.style.boxShadow='0 1px 2px rgba(0,0,0,0.08)'; this.style.background='#fff'">
+            [style.opacity]="pages().length <= 1 ? 0.5 : 1">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
               stroke-linecap="round" aria-hidden="true">
               <path d="M18 6L6 18M6 6l12 12" />

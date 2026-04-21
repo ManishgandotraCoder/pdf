@@ -90,6 +90,7 @@ export class PdfDesignExtractorComponent {
   private readonly router = inject(Router);
   private readonly pdfsApi = inject(PdfsApiService);
   private openedPdfId: string | null = null;
+  private readonly w = globalThis;
 
   /** Read-only preview tab: hides editor chrome (see `?preview=1`). */
   readonly previewMode = toSignal(
@@ -183,11 +184,7 @@ export class PdfDesignExtractorComponent {
     if (pdfId) void this.openPdfById(pdfId);
 
     this.destroyRef.onDestroy(() => {
-      (Object.values(this.addedVideos()) as VideoElement[][]).forEach((arr: VideoElement[]) =>
-        arr.forEach((v: VideoElement) => {
-          if (v?.src?.startsWith('blob:')) URL.revokeObjectURL(v.src);
-        }),
-      );
+      this.revokeVideoBlobs(this.addedVideos());
     });
 
     effect((onCleanup) => {
@@ -245,7 +242,6 @@ export class PdfDesignExtractorComponent {
       };
       img.src = pg.fullUrl;
     });
-    const w = typeof globalThis !== 'undefined' ? globalThis : window;
     const onKey = (e: KeyboardEvent) => {
       const mod = e.metaKey || e.ctrlKey;
       if (!mod) return;
@@ -263,8 +259,51 @@ export class PdfDesignExtractorComponent {
         this.redo();
       }
     };
-    w.addEventListener('keydown', onKey);
-    this.destroyRef.onDestroy(() => w.removeEventListener('keydown', onKey));
+    this.w.addEventListener('keydown', onKey);
+    this.destroyRef.onDestroy(() => this.w.removeEventListener('keydown', onKey));
+  }
+
+  private revokeVideoBlobs(map: AddedVideosMap): void {
+    (Object.values(map) as VideoElement[][]).forEach((arr: VideoElement[]) => {
+      arr.forEach((v: VideoElement) => {
+        if (v?.src?.startsWith('blob:')) URL.revokeObjectURL(v.src);
+      });
+    });
+  }
+
+  private resetEditorStateForNewLoad(): void {
+    this.loading.set(true);
+    this.progress.set(0);
+    this.doneCount.set(0);
+    this.pages.set([]);
+    this.selPage.set(0);
+    this.selEl.set(null);
+    this.edits.set({});
+    this.editingId.set(null);
+    this.imageEdits.set({});
+    this.layoutEdits.set({});
+    this.addedImages.set({});
+    this.addedVideos.set({});
+    this.addedTables.set({});
+    this.addedRichTexts.set({});
+    this.historyStack = [];
+    this.redoStack = [];
+    this.historyUi.update((u) => u + 1);
+  }
+
+  private computeCenteredPlacementRect(
+    pg: PageData,
+    w: number,
+    h: number,
+    centerX?: number,
+    centerY?: number,
+  ): { x: number; y: number } {
+    if (typeof centerX === 'number' && typeof centerY === 'number' && !Number.isNaN(centerX) && !Number.isNaN(centerY)) {
+      const x = Math.min(Math.max(centerX - w / 2, 0), Math.max(0, pg.width - w));
+      const y = Math.min(Math.max(centerY - h / 2, 0), Math.max(0, pg.height - h));
+      return { x, y };
+    }
+    return { x: Math.max(8, (pg.width - w) / 2), y: Math.max(8, (pg.height - h) / 2) };
   }
 
   canUndo(): boolean {
@@ -472,28 +511,8 @@ export class PdfDesignExtractorComponent {
   }
 
   async handleUpload(file: File): Promise<void> {
-    (Object.values(this.addedVideos()) as VideoElement[][]).forEach((arr: VideoElement[]) =>
-      arr.forEach((v: VideoElement) => {
-        if (v?.src?.startsWith('blob:')) URL.revokeObjectURL(v.src);
-      }),
-    );
-    this.loading.set(true);
-    this.progress.set(0);
-    this.doneCount.set(0);
-    this.pages.set([]);
-    this.selPage.set(0);
-    this.selEl.set(null);
-    this.edits.set({});
-    this.editingId.set(null);
-    this.imageEdits.set({});
-    this.layoutEdits.set({});
-    this.addedImages.set({});
-    this.addedVideos.set({});
-    this.addedTables.set({});
-    this.addedRichTexts.set({});
-    this.historyStack = [];
-    this.redoStack = [];
-    this.historyUi.update((u) => u + 1);
+    this.revokeVideoBlobs(this.addedVideos());
+    this.resetEditorStateForNewLoad();
     try {
       const buf = await file.arrayBuffer();
       this.openedPdfId = null;
@@ -507,10 +526,7 @@ export class PdfDesignExtractorComponent {
 
   private async openPdfById(pdfId: string): Promise<void> {
     this.openedPdfId = pdfId;
-    this.loading.set(true);
-    this.progress.set(0);
-    this.doneCount.set(0);
-    this.pages.set([]);
+    this.resetEditorStateForNewLoad();
     try {
       try {
         const meta = await firstValueFrom(this.pdfsApi.getPdfMeta(pdfId));
@@ -662,20 +678,7 @@ export class PdfDesignExtractorComponent {
     const id = `user_${pn}_${Date.now()}`;
     const w = Math.min(240, pg.width * 0.4);
     const h = Math.min(200, pg.height * 0.3);
-    let x: number;
-    let y: number;
-    if (
-      typeof centerX === 'number' &&
-      typeof centerY === 'number' &&
-      !Number.isNaN(centerX) &&
-      !Number.isNaN(centerY)
-    ) {
-      x = Math.min(Math.max(centerX - w / 2, 0), Math.max(0, pg.width - w));
-      y = Math.min(Math.max(centerY - h / 2, 0), Math.max(0, pg.height - h));
-    } else {
-      x = Math.max(8, (pg.width - w) / 2);
-      y = Math.max(8, (pg.height - h) / 2);
-    }
+    const { x, y } = this.computeCenteredPlacementRect(pg, w, h, centerX, centerY);
     this.addedImages.update((prev) => ({
       ...prev,
       [pn]: [...(prev[pn] || []), { id, type: 'image', x, y, w, h, src, _userAdded: true }],
@@ -694,20 +697,7 @@ export class PdfDesignExtractorComponent {
     const id = `vid_${pn}_${Date.now()}`;
     const w = Math.min(320, pg.width * 0.5);
     const h = Math.min(220, pg.height * 0.36);
-    let x: number;
-    let y: number;
-    if (
-      typeof centerX === 'number' &&
-      typeof centerY === 'number' &&
-      !Number.isNaN(centerX) &&
-      !Number.isNaN(centerY)
-    ) {
-      x = Math.min(Math.max(centerX - w / 2, 0), Math.max(0, pg.width - w));
-      y = Math.min(Math.max(centerY - h / 2, 0), Math.max(0, pg.height - h));
-    } else {
-      x = Math.max(8, (pg.width - w) / 2);
-      y = Math.max(8, (pg.height - h) / 2);
-    }
+    const { x, y } = this.computeCenteredPlacementRect(pg, w, h, centerX, centerY);
     this.addedVideos.update((prev) => ({
       ...prev,
       [pn]: [...(prev[pn] || []), { id, type: 'video', x, y, w, h, src, _userAdded: true }],
@@ -1474,11 +1464,7 @@ export class PdfDesignExtractorComponent {
   }
 
   newDocument(): void {
-    (Object.values(this.addedVideos()) as VideoElement[][]).forEach((arr: VideoElement[]) =>
-      arr.forEach((v: VideoElement) => {
-        if (v?.src?.startsWith('blob:')) URL.revokeObjectURL(v.src);
-      }),
-    );
+    this.revokeVideoBlobs(this.addedVideos());
     this.pages.set([]);
     this.templates.set([]);
     this.tokens.set({ colors: [], fonts: [], sizes: [] });
@@ -1597,11 +1583,7 @@ export class PdfDesignExtractorComponent {
     ) {
       return;
     }
-    (Object.values(this.addedVideos()) as VideoElement[][]).forEach((arr: VideoElement[]) =>
-      arr.forEach((v: VideoElement) => {
-        if (v?.src?.startsWith('blob:')) URL.revokeObjectURL(v.src);
-      }),
-    );
+    this.revokeVideoBlobs(this.addedVideos());
     this.captureBeforeChange();
     this.edits.set({});
     this.imageEdits.set({});
