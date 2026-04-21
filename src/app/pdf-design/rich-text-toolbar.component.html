@@ -5,10 +5,11 @@
       class="rt-select"
       title="Font"
       [disabled]="disabled()"
+      [value]="fontSelectModel()"
       (change)="onFontChange($event)"
     >
-      <option value="" disabled selected>Font…</option>
-      @for (f of fonts(); track f) {
+      <option value="" disabled>Font…</option>
+      @for (f of fontsForSelect(); track f) {
         <option [value]="f">{{ f }}</option>
       }
     </select>
@@ -34,9 +35,10 @@
       class="rt-select rt-select--narrow"
       title="Quick size presets"
       [disabled]="disabled()"
+      [value]="sizePresetModel()"
       (change)="onSizeChange($event)"
     >
-      <option value="" selected>Presets</option>
+      <option value="">Presets</option>
       @for (sz of sizes; track sz) {
         <option [value]="'' + sz">{{ sz }}px</option>
       }
@@ -242,7 +244,7 @@
       title="Bullet list"
       [disabled]="disabled()"
       (mousedown)="$event.preventDefault()"
-      (click)="$event.preventDefault(); exec('insertUnorderedList')"
+      (click)="$event.preventDefault(); execList(false)"
     >
       <svg class="rt-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
         <line x1="9" y1="6" x2="20" y2="6" />
@@ -259,7 +261,7 @@
       title="Numbered list"
       [disabled]="disabled()"
       (mousedown)="$event.preventDefault()"
-      (click)="$event.preventDefault(); exec('insertOrderedList')"
+      (click)="$event.preventDefault(); execList(true)"
     >
       <svg class="rt-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <line x1="10" y1="6" x2="20" y2="6" />

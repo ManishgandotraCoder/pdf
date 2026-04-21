@@ -145,11 +145,6 @@ function primeRichCommand(cmd: string): void {
   } catch {
     /* ignore */
   }
-  try {
-    doc.execCommand('styleWithCSS', false, true);
-  } catch {
-    /* ignore */
-  }
 }
 
 export function execRich(cmd: string, val?: string): boolean {
@@ -158,11 +153,118 @@ export function execRich(cmd: string, val?: string): boolean {
       execCommand(commandId: string, showUI?: boolean, value?: string | boolean): boolean;
     };
     primeRichCommand(cmd);
-    doc.execCommand('styleWithCSS', false, true);
-    return doc.execCommand(cmd, false, val);
+    const isListCmd = cmd === 'insertUnorderedList' || cmd === 'insertOrderedList';
+    // insert*List is unreliable or no-ops when styleWithCSS is true (esp. WebKit/Chromium).
+    doc.execCommand('styleWithCSS', false, isListCmd ? false : true);
+    const ok = doc.execCommand(cmd, false, val);
+    if (isListCmd) doc.execCommand('styleWithCSS', false, true);
+    return ok;
   } catch {
     return false;
   }
+}
+
+const LIST_BLOCK_TAGS = new Set([
+  'P',
+  'DIV',
+  'LI',
+  'H1',
+  'H2',
+  'H3',
+  'H4',
+  'H5',
+  'H6',
+  'BLOCKQUOTE',
+]);
+
+/**
+ * When the caret is collapsed, select a single block (or the whole editable) so
+ * insertUnorderedList / insertOrderedList has a clear target. Do NOT use
+ * expandToAllIfCollapsed() here — that selects the entire surface and makes
+ * list commands no-op or behave poorly in many browsers.
+ */
+export function expandCaretToBlockForList(): void {
+  const editable = savedRichTextEditable;
+  if (!editable?.isConnected) return;
+  const sel = window.getSelection();
+  if (!sel?.rangeCount) return;
+  const r = sel.getRangeAt(0);
+  if (!r.collapsed) return;
+  let node: Node | null = r.startContainer;
+  if (node.nodeType === Node.TEXT_NODE) node = node.parentElement;
+  if (!node || !editable.contains(node)) return;
+
+  let walk: Element | null = node.nodeType === Node.ELEMENT_NODE ? (node as Element) : node.parentElement;
+  while (walk && walk !== editable) {
+    if (LIST_BLOCK_TAGS.has(walk.tagName)) {
+      const range = document.createRange();
+      range.selectNodeContents(walk);
+      sel.removeAllRanges();
+      sel.addRange(range);
+      savedRichTextRange = range.cloneRange();
+      return;
+    }
+    walk = walk.parentElement;
+  }
+
+  const range = document.createRange();
+  range.selectNodeContents(editable);
+  sel.removeAllRanges();
+  sel.addRange(range);
+  savedRichTextRange = range.cloneRange();
+}
+
+/**
+ * Wraps the current selection in ol/ul when document.execCommand list insertion fails
+ * (common for some selection shapes in contenteditable).
+ */
+function manualInsertList(ordered: boolean): boolean {
+  const editable = savedRichTextEditable;
+  if (!editable?.isConnected) return false;
+  const sel = window.getSelection();
+  if (!sel?.rangeCount) return false;
+  const range = sel.getRangeAt(0);
+  if (!editable.contains(range.commonAncestorContainer)) return false;
+  if (range.collapsed) return false;
+
+  const list = document.createElement(ordered ? 'ol' : 'ul');
+  const li = document.createElement('li');
+  try {
+    const contents = range.extractContents();
+    li.appendChild(contents);
+    list.appendChild(li);
+    range.insertNode(list);
+  } catch {
+    return false;
+  }
+  sel.removeAllRanges();
+  const nr = document.createRange();
+  nr.selectNodeContents(li);
+  nr.collapse(false);
+  sel.addRange(nr);
+  savedRichTextRange = nr.cloneRange();
+  return true;
+}
+
+/**
+ * Bulleted or numbered list for the saved selection — for use from the toolbar
+ * after restoreRichTextSelection().
+ */
+export function execRichList(ordered: boolean): boolean {
+  restoreRichTextSelection();
+  expandCaretToBlockForList();
+  const cmd = ordered ? 'insertOrderedList' : 'insertUnorderedList';
+  if (execRich(cmd)) {
+    saveRichTextSelection();
+    return true;
+  }
+  restoreRichTextSelection();
+  expandCaretToBlockForList();
+  if (manualInsertList(ordered)) {
+    saveRichTextSelection();
+    return true;
+  }
+  return false;
 }
 
 /**
@@ -189,6 +291,44 @@ export function applyFontSizePx(px: string | number): void {
     }
   }
   doc.execCommand('styleWithCSS', false, true);
+}
+
+function fontInfoFromNodeInEditable(
+  node: Node,
+  editableRoot: HTMLElement,
+): { fontFamily: string; fontSizePx: number } | null {
+  const el = node.nodeType === Node.TEXT_NODE ? node.parentElement : (node as Element);
+  if (!el || !editableRoot.contains(el)) return null;
+  const cs = getComputedStyle(el);
+  const fontFamily = (cs.fontFamily || '').split(',')[0].replace(/['"]/g, '').trim();
+  const fontSizePx = Math.round(parseFloat(cs.fontSize) || 12);
+  return { fontFamily, fontSizePx };
+}
+
+/**
+ * Font/size at the caret or selection, for toolbar display.
+ * Falls back to the last saved rich-text range when window selection was cleared (e.g. after focusing a toolbar control).
+ */
+export function getRichTextSelectionFontInfo(): { fontFamily: string; fontSizePx: number } | null {
+  const sel = window.getSelection();
+  if (sel?.rangeCount) {
+    const node = sel.anchorNode;
+    if (node) {
+      const el = node.nodeType === Node.TEXT_NODE ? node.parentElement : (node as Element);
+      if (el) {
+        const root = el.closest('[contenteditable="true"]') as HTMLElement | null;
+        if (root?.contains(el)) {
+          const info = fontInfoFromNodeInEditable(node, root);
+          if (info) return info;
+        }
+      }
+    }
+  }
+  if (savedRichTextRange && savedRichTextEditable?.isConnected) {
+    const node = savedRichTextRange.startContainer;
+    return fontInfoFromNodeInEditable(node, savedRichTextEditable);
+  }
+  return null;
 }
 
 export function promptLinkUrl(): void {

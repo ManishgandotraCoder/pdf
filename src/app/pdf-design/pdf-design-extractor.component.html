@@ -449,6 +449,7 @@
               [style.top.px]="v.y"
               [style.width.px]="v.w"
               [style.height.px]="v.h"
+              title="Video"
             >
               <video
                 [attr.data-added-video-id]="v.id"
@@ -542,6 +543,7 @@
               [fontChoices]="tokens().fonts"
               (save)="setEdit(pgv.pageNum, tel.id, $event, 'commit'); editingId.set(null)"
               (cancel)="editingId.set(null)"
+              (resetEdits)="removePdfTextFromPage(tel)"
             />
           }
 
@@ -667,15 +669,15 @@
                   @if (active && el.type === 'text') {
                     <button
                       type="button"
-                      title="Reset text edits"
-                      aria-label="Reset text edits"
+                      title="Remove text from page"
+                      aria-label="Remove text from page"
                       (pointerdown)="$event.stopPropagation()"
-                      (click)="onOverlayTextReset($event, el)"
+                      (click)="onOverlayPdfTextRemove($event, el)"
                       style="
                         position: absolute;
                         top: 2px;
                         right: 2px;
-                        z-index: 3;
+                        z-index: 25;
                         width: 28px;
                         height: 28px;
                         padding: 0;
@@ -706,7 +708,7 @@
                         position: absolute;
                         top: 2px;
                         right: 2px;
-                        z-index: 3;
+                        z-index: 25;
                         width: 28px;
                         height: 28px;
                         padding: 0;
@@ -727,6 +729,27 @@
                     </button>
                   }
                 </div>
+              }
+            </div>
+          }
+
+          @if (editorMode() === 'view') {
+            <div
+              style="position: absolute; top: 0; left: 0; pointer-events: none; z-index: 1"
+              [style.width.px]="pgv.width"
+              [style.height.px]="pgv.height"
+            >
+              @for (el of overlayElsForViewTooltips(); track el.id; let oi = $index) {
+                @let ob = overlayBounds(el);
+                <div
+                  style="position: absolute; pointer-events: auto; box-sizing: border-box; border: none; background: transparent; cursor: default"
+                  [style.left.px]="ob.x"
+                  [style.top.px]="ob.y"
+                  [style.width.px]="max2(ob.w)"
+                  [style.height.px]="max2(ob.h)"
+                  [style.z-index]="10 + oi"
+                  [attr.title]="overlayElementTitle(el)"
+                ></div>
               }
             </div>
           }
@@ -752,12 +775,12 @@
               [style.width.px]="t.w"
               [style.height.px]="t.h"
               [style.outline]="selected ? '2px solid #2aacb8' : 'none'"
-              [style.pointer-events]="readOnly ? 'none' : 'auto'"
-              (mousedown)="$event.stopPropagation()"
+              title="Table"
+              (mousedown)="onPlacedTableMousedown($event, readOnly)"
               (pointermove)="onImagePointerMove($event)"
               (pointerup)="onImagePointerUp($event)"
               (pointercancel)="onImagePointerUp($event)"
-              (click)="$event.stopPropagation(); selEl.set(t); editingId.set(null)"
+              (click)="onPlacedTableClick($event, t, readOnly)"
             >
               @if (!readOnly) {
                 <div
@@ -792,7 +815,7 @@
                       font-weight: 600;
                     "
                     [style.cursor]="draggingImageId() === t.id ? 'grabbing' : 'grab'"
-                    title="Drag to move table"
+                    title="Table — Drag to move"
                   >
                     <span aria-hidden style="letter-spacing: -2px; opacity: 0.7; font-weight: bolder; font-size: 14px;">⋮⋮</span>
                   </div>
@@ -870,12 +893,12 @@
               [style.width.px]="rt.w"
               [style.height.px]="rt.h"
               [style.outline]="selected ? '2px solid #2aacb8' : 'none'"
-              [style.pointer-events]="readOnly ? 'none' : 'auto'"
-              (mousedown)="$event.stopPropagation()"
+              title="Text block"
+              (mousedown)="onPlacedRichTextMousedown($event, readOnly)"
               (pointermove)="onImagePointerMove($event)"
               (pointerup)="onImagePointerUp($event)"
               (pointercancel)="onImagePointerUp($event)"
-              (click)="$event.stopPropagation(); selEl.set(rt); editingId.set(null)"
+              (click)="onPlacedRichTextClick($event, rt, readOnly)"
             >
               @if (!readOnly) {
                 <div
@@ -885,14 +908,13 @@
                     touch-action: none;
                     display: flex;
                     align-items: center;
-                    justify-content: space-between;
                     gap: 6px;
                     font-size: 12px;
                     font-weight: 600;
                     user-select: none;
                     background: linear-gradient(180deg, rgba(42, 172, 184, 0.22), rgba(42, 172, 184, 0.08));
                     border-bottom: 1px solid rgba(42, 172, 184, 0.35);
-                    padding: 0 6px 0 5px;
+                    padding: 0 36px 0 5px;
                   "
                 >
                   <div
@@ -910,39 +932,42 @@
                       gap: 6px;
                     "
                     [style.cursor]="draggingImageId() === rt.id ? 'grabbing' : 'grab'"
-                    title="Drag to move · or hold Alt (⌥) and drag inside the text"
+                    title="Text block — Drag to move · or hold Alt (⌥) and drag inside the text"
                   >
                     <span aria-hidden style="letter-spacing: -2px; opacity: 0.7; font-weight: bolder; font-size: 14px;">⋮⋮</span>
                   </div>
-                  @if (selected) {
-                    <button
-                      type="button"
-                      title="Remove text block"
-                      aria-label="Remove text block"
-                      (pointerdown)="$event.stopPropagation()"
-                      (click)="$event.stopPropagation(); removeUserTextInspector(rt)"
-                      style="
-                        flex-shrink: 0;
-                        width: 28px;
-                        height: 28px;
-                        padding: 0;
-                        display: flex;
-                        align-items: center;
-                        justify-content: center;
-                        border-radius: 6px;
-                        border: 1px solid rgba(0, 0, 0, 0.1);
-                        background: rgba(255, 255, 255, 0.95);
-                        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-                        color: #64748b;
-                        cursor: pointer;
-                      "
-                    >
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
-                        <path d="M18 6L6 18M6 6l12 12" />
-                      </svg>
-                    </button>
-                  }
                 </div>
+              }
+              @if (selected && !readOnly) {
+                <button
+                  type="button"
+                  title="Remove text block"
+                  aria-label="Remove text block"
+                  (pointerdown)="$event.stopPropagation()"
+                  (click)="$event.stopPropagation(); removeUserTextInspector(rt)"
+                  style="
+                    position: absolute;
+                    top: 2px;
+                    right: 2px;
+                    z-index: 22;
+                    width: 28px;
+                    height: 28px;
+                    padding: 0;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    border-radius: 6px;
+                    border: 1px solid rgba(0, 0, 0, 0.1);
+                    background: rgba(255, 255, 255, 0.95);
+                    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+                    color: #64748b;
+                    cursor: pointer;
+                  "
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                    <path d="M18 6L6 18M6 6l12 12" />
+                  </svg>
+                </button>
               }
               <div style="flex: 1; min-height: 0; overflow: hidden">
                 <app-placed-user-text-body
@@ -1325,6 +1350,32 @@
                   Edit on Page
                 </button>
               </div>
+              @if (editorMode() === 'edit') {
+                <button
+                  type="button"
+                  (click)="removePdfTextFromPage(sel)"
+                  style="
+                    width: 100%;
+                    margin-top: 8px;
+                    padding: 8px 10px;
+                    background: #fef2f2;
+                    color: #b91c1c;
+                    border: 1px solid #fecaca;
+                    border-radius: 6px;
+                    font-size: 11px;
+                    cursor: pointer;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    gap: 8px;
+                  "
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                    <path d="M18 6L6 18M6 6l12 12" />
+                  </svg>
+                  Remove from page
+                </button>
+              }
               @if (pageEdits()[sel.id] !== undefined && pageEdits()[sel.id] !== sel.content) {
                 <div
                   style="

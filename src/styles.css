@@ -674,6 +674,23 @@ select:focus-visible {
     0 0 0 3px var(--accent-soft);
 }
 
+/* Global `* { padding: 0 }` removes default list inset; restore markers inside the rich-text surface. */
+.rich-text-editor-surface ul {
+  list-style: disc;
+  margin: 0.25em 0;
+  padding-left: 1.5em;
+}
+
+.rich-text-editor-surface ol {
+  list-style: decimal;
+  margin: 0.25em 0;
+  padding-left: 1.5em;
+}
+
+.rich-text-editor-surface li {
+  margin: 0.12em 0;
+}
+
 /* Inline edit textarea (canvas) */
 /* NOTE: text colour is NOT set here — it is bound via [style.color] from el.style.color */
 .edit-textarea {

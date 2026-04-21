@@ -434,6 +434,122 @@ export function rectFromResizeHandle(
   return { x, y, w, h };
 }
 
+export function aabbOverlap(
+  a: { x: number; y: number; w: number; h: number },
+  b: { x: number; y: number; w: number; h: number },
+): boolean {
+  return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+}
+
+export type ResolvePlacementOptions = {
+  minW?: number;
+  minH?: number;
+  /** When true (resize), may shrink dimensions to escape tight spots. */
+  allowShrink?: boolean;
+  /** Prefer staying close to this point (e.g. raw cursor intent). */
+  preferX?: number;
+  preferY?: number;
+};
+
+/**
+ * Adjusts a placement rectangle so it does not overlap any obstacle, staying on the page.
+ * Uses flush positions and optional shrinking (for resize) so elements stay in their own space.
+ */
+export function resolvePlacementRectAgainstObstacles(
+  r: { x: number; y: number; w: number; h: number },
+  obstacles: readonly { x: number; y: number; w: number; h: number }[],
+  pw: number,
+  ph: number,
+  options: ResolvePlacementOptions = {},
+): { x: number; y: number; w: number; h: number } {
+  const minW = options.minW ?? MIN_PLACE.w;
+  const minH = options.minH ?? MIN_PLACE.h;
+  const allowShrink = options.allowShrink ?? false;
+  const preferX = options.preferX ?? r.x;
+  const preferY = options.preferY ?? r.y;
+
+  let x = Math.max(0, Math.min(r.x, Math.max(0, pw - minW)));
+  let y = Math.max(0, Math.min(r.y, Math.max(0, ph - minH)));
+  let w = Math.max(minW, Math.min(r.w, Math.max(minW, pw - x)));
+  let h = Math.max(minH, Math.min(r.h, Math.max(minH, ph - y)));
+
+  const validAgainstAll = (tx: number, ty: number, tw: number, th: number): boolean => {
+    const test = { x: tx, y: ty, w: tw, h: th };
+    return !obstacles.some((o) => aabbOverlap(test, o));
+  };
+
+  const score = (tx: number, ty: number): number => {
+    return (tx - preferX) ** 2 + (ty - preferY) ** 2;
+  };
+
+  for (let iter = 0; iter < 72; iter++) {
+    if (validAgainstAll(x, y, w, h)) break;
+
+    const cands: { x: number; y: number; w: number; h: number; s: number }[] = [];
+    const pushCand = (tx: number, ty: number, tw: number, th: number) => {
+      const cx = Math.max(0, Math.min(tx, pw - tw));
+      const cy = Math.max(0, Math.min(ty, ph - th));
+      if (!validAgainstAll(cx, cy, tw, th)) return;
+      cands.push({ x: cx, y: cy, w: tw, h: th, s: score(cx, cy) });
+    };
+
+    for (const o of obstacles) {
+      const self = { x, y, w, h };
+      if (!aabbOverlap(self, o)) continue;
+      pushCand(o.x - w, y, w, h);
+      pushCand(o.x + o.w, y, w, h);
+      pushCand(x, o.y - h, w, h);
+      pushCand(x, o.y + o.h, w, h);
+      pushCand(o.x - w, o.y - h, w, h);
+      pushCand(o.x + o.w, o.y - h, w, h);
+      pushCand(o.x - w, o.y + o.h, w, h);
+      pushCand(o.x + o.w, o.y + o.h, w, h);
+    }
+
+    if (cands.length > 0) {
+      cands.sort((a, b) => a.s - b.s);
+      const pick = cands[0];
+      x = pick.x;
+      y = pick.y;
+      w = pick.w;
+      h = pick.h;
+      continue;
+    }
+
+    if (allowShrink) {
+      const nw = Math.max(minW, w * 0.94);
+      const nh = Math.max(minH, h * 0.94);
+      if (nw < w - 0.5 || nh < h - 0.5) {
+        w = nw;
+        h = nh;
+        x = Math.max(0, Math.min(x, pw - w));
+        y = Math.max(0, Math.min(y, ph - h));
+        continue;
+      }
+    }
+
+    // Last resort: axis depenetration toward preferred point (helps when flush candidates are invalid)
+    const hit = obstacles.find((o) => aabbOverlap({ x, y, w, h }, o));
+    if (!hit) break;
+    const overlapX = Math.min(x + w, hit.x + hit.w) - Math.max(x, hit.x);
+    const overlapY = Math.min(y + h, hit.y + hit.h) - Math.max(y, hit.y);
+    if (overlapX <= 0 || overlapY <= 0) break;
+    const ax = x + w / 2;
+    const ay = y + h / 2;
+    const hx = hit.x + hit.w / 2;
+    const hy = hit.y + hit.h / 2;
+    if (overlapX < overlapY) {
+      x += ax < hx ? -overlapX : overlapX;
+    } else {
+      y += ay < hy ? -overlapY : overlapY;
+    }
+    x = Math.max(0, Math.min(x, pw - w));
+    y = Math.max(0, Math.min(y, ph - h));
+  }
+
+  return { x, y, w, h };
+}
+
 /** Top-most image at page coordinates (added images checked first — drawn above PDF images). */
 export function findImageAtPagePoint(
   pg: PageData,

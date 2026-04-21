@@ -3,28 +3,15 @@ import { Component, ElementRef, inject, input, NgZone, signal } from '@angular/c
 import {
   applyFontSizePx,
   execRich,
+  execRichList,
   expandToAllIfCollapsed,
   FONT_SIZE_PX_LIST,
+  getRichTextSelectionFontInfo,
   mergeFontOptions,
   promptLinkUrl,
   restoreRichTextSelection,
   saveRichTextSelection,
 } from './rich-text.utils';
-
-function readCaretFontInfo(): { fontFamily: string; fontSizePx: number } | null {
-  const sel = window.getSelection();
-  if (!sel?.rangeCount) return null;
-  const node = sel.anchorNode;
-  if (!node) return null;
-  const el = node.nodeType === Node.TEXT_NODE ? node.parentElement : (node as Element);
-  if (!el) return null;
-  const root = el.closest('[contenteditable="true"]');
-  if (!root || !root.contains(el)) return null;
-  const cs = getComputedStyle(el);
-  const fontFamily = (cs.fontFamily || '').split(',')[0].replace(/['"]/g, '').trim();
-  const fontSizePx = Math.round(parseFloat(cs.fontSize) || 12);
-  return { fontFamily, fontSizePx };
-}
 
 @Component({
   selector: 'app-rich-text-toolbar',
@@ -69,24 +56,63 @@ export class RichTextToolbarComponent {
 
   private syncFromSelection(): void {
     if (this.disabled()) return;
-    const info = readCaretFontInfo();
+    const info = getRichTextSelectionFontInfo();
     if (!info) return;
     this.selectionFontLabel.set(info.fontFamily);
     this.selectionSizePx.set(info.fontSizePx);
+  }
+
+  /** Re-read after execCommand so wrapped font nodes are in the DOM. */
+  private syncFromSelectionSoon(): void {
+    this.syncFromSelection();
+    requestAnimationFrame(() => {
+      this.zone.run(() => this.syncFromSelection());
+    });
   }
 
   fonts(): string[] {
     return mergeFontOptions(this.fontChoices());
   }
 
+  /**
+   * Options for the font dropdown, including the current face when it is not in the merged list
+   * (e.g. pasted content), so [value] can match and show the real name.
+   */
+  fontsForSelect(): string[] {
+    const base = this.fonts();
+    const cur = this.selectionFontLabel().trim();
+    if (!cur) return base;
+    if (!base.some((f) => f.toLowerCase() === cur.toLowerCase())) {
+      return [cur, ...base];
+    }
+    return base;
+  }
+
+  /** Value bound to the font dropdown (must match an option value). */
+  fontSelectModel(): string {
+    const raw = this.selectionFontLabel().trim();
+    if (!raw) return '';
+    const opts = this.fontsForSelect();
+    const hit = opts.find((f) => f.toLowerCase() === raw.toLowerCase());
+    return hit ?? raw;
+  }
+
+  /** Value bound to the size preset dropdown when it matches a preset, else empty. */
+  sizePresetModel(): string {
+    const px = this.selectionSizePx();
+    if (px == null) return '';
+    return FONT_SIZE_PX_LIST.includes(px) ? String(px) : '';
+  }
+
   onFontChange(e: Event): void {
     const sel = e.target as HTMLSelectElement;
     const v = sel.value;
+    if (!v) return;
     restoreRichTextSelection();
     expandToAllIfCollapsed();
     execRich('fontName', v);
-    sel.selectedIndex = 0;
-    this.syncFromSelection();
+    saveRichTextSelection();
+    this.syncFromSelectionSoon();
   }
 
   onSizeChange(e: Event): void {
@@ -96,9 +122,9 @@ export class RichTextToolbarComponent {
       restoreRichTextSelection();
       expandToAllIfCollapsed();
       applyFontSizePx(v);
+      saveRichTextSelection();
     }
-    sel.selectedIndex = 0;
-    this.syncFromSelection();
+    this.syncFromSelectionSoon();
   }
 
   onSizeInputCommit(e: Event): void {
@@ -109,7 +135,8 @@ export class RichTextToolbarComponent {
     restoreRichTextSelection();
     expandToAllIfCollapsed();
     applyFontSizePx(n);
-    this.syncFromSelection();
+    saveRichTextSelection();
+    this.syncFromSelectionSoon();
   }
 
   btn(
@@ -127,6 +154,12 @@ export class RichTextToolbarComponent {
     restoreRichTextSelection();
     expandToAllIfCollapsed();
     execRich(cmd, val);
+  }
+
+  /** Lists: do not use expandToAllIfCollapsed (breaks list insertion); execRichList handles collapse. */
+  execList(ordered: boolean): void {
+    if (this.disabled()) return;
+    execRichList(ordered);
   }
 
   onForeColor(e: Event): void {

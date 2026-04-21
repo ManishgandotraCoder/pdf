@@ -59,6 +59,7 @@ import {
   readFileAsDataURL,
   rectFromResizeHandle,
   regionFromPdfDataUrl,
+  resolvePlacementRectAgainstObstacles,
   remapPageKeyedState,
   remapPageKeyedStateInsert,
 } from './pdf-design.helpers';
@@ -1280,7 +1281,13 @@ export class PdfDesignExtractorComponent {
           d.captured = true;
         }
       }
-      const nr = rectFromResizeHandle(d.handle, d.startRect, px, py, d.pw, d.ph);
+      const rawNr = rectFromResizeHandle(d.handle, d.startRect, px, py, d.pw, d.ph);
+      const obstacles = this.placementObstacleRects(d.pn, d.elId);
+      const nr = resolvePlacementRectAgainstObstacles(rawNr, obstacles, d.pw, d.ph, {
+        preferX: rawNr.x,
+        preferY: rawNr.y,
+        allowShrink: true,
+      });
       this.applyPlacementRect(d, nr);
       d.latestNX = nr.x;
       d.latestNY = nr.y;
@@ -1299,6 +1306,16 @@ export class PdfDesignExtractorComponent {
     let ny = py - d.grabDy;
     nx = Math.min(Math.max(0, nx), Math.max(0, d.pw - d.elW));
     ny = Math.min(Math.max(0, ny), Math.max(0, d.ph - d.elH));
+    const moveObs = this.placementObstacleRects(d.pn, d.elId);
+    const resolved = resolvePlacementRectAgainstObstacles(
+      { x: nx, y: ny, w: d.elW, h: d.elH },
+      moveObs,
+      d.pw,
+      d.ph,
+      { preferX: nx, preferY: ny, allowShrink: false },
+    );
+    nx = resolved.x;
+    ny = resolved.y;
     d.latestNX = nx;
     d.latestNY = ny;
 
@@ -1480,6 +1497,11 @@ export class PdfDesignExtractorComponent {
     ];
   }
 
+  /** View mode: same bounds as `overlayEls()` but omit videos — a transparent hit-layer would block the play control. */
+  overlayElsForViewTooltips(): SelElement[] {
+    return this.overlayEls().filter((e) => e.type !== 'video');
+  }
+
   editedTexts(): TextElement[] {
     const pg = this.pg();
     if (!pg) return [];
@@ -1596,30 +1618,53 @@ export class PdfDesignExtractorComponent {
       case 'video':
         return 'Video — Drag to move';
       case 'shape':
-        return 'Vector shape';
+        return 'Shape — Vector graphics';
       default:
-        return '';
+        return 'Element';
     }
   }
 
-  onOverlayTextReset(e: Event, el: SelElement): void {
+  onPlacedTableMousedown(e: MouseEvent, readOnly: boolean): void {
+    if (readOnly) return;
+    e.stopPropagation();
+  }
+
+  onPlacedTableClick(e: MouseEvent, t: TableElement, readOnly: boolean): void {
+    if (readOnly) return;
+    e.stopPropagation();
+    this.selEl.set(t);
+    this.editingId.set(null);
+  }
+
+  onPlacedRichTextMousedown(e: MouseEvent, readOnly: boolean): void {
+    if (readOnly) return;
+    e.stopPropagation();
+  }
+
+  onPlacedRichTextClick(e: MouseEvent, rt: UserTextElement, readOnly: boolean): void {
+    if (readOnly) return;
+    e.stopPropagation();
+    this.selEl.set(rt);
+    this.editingId.set(null);
+  }
+
+  onOverlayPdfTextRemove(e: Event, el: SelElement): void {
     e.stopPropagation();
     e.preventDefault();
+    this.removePdfTextFromPage(el);
+  }
+
+  /**
+   * PDF page text is painted on the canvas; we can't delete pixels. Saving an empty edit activates
+   * the same "edited text" overlay used for revisions so it covers the original run (like painting over it).
+   */
+  removePdfTextFromPage(el: SelElement): void {
     if (el.type !== 'text') return;
     const pg = this.pg();
     if (!pg) return;
-    this.captureBeforeChange();
-    this.edits.update((prev) => {
-      const pgEdits = { ...(prev[pg.pageNum] || {}) };
-      delete pgEdits[el.id];
-      return { ...prev, [pg.pageNum]: pgEdits };
-    });
-    this.layoutEdits.update((prev) => {
-      const le = { ...(prev[pg.pageNum] || {}) };
-      delete le[el.id];
-      return { ...prev, [pg.pageNum]: le };
-    });
+    this.setEdit(pg.pageNum, el.id, '', 'commit');
     this.selEl.set(null);
+    this.editingId.set(null);
   }
 
   editingTextEl(): TextElement | null {
@@ -1636,6 +1681,48 @@ export class PdfDesignExtractorComponent {
   applyCropResult(url: string): void {
     const m = this.cropModal();
     if (m) m.resolve(url);
+  }
+
+  private elementPageBounds(el: SelElement, pn: number): { x: number; y: number; w: number; h: number } {
+    const pg = this.pages().find((p) => p.pageNum === pn) ?? null;
+    if (!pg) return { x: el.x, y: el.y, w: el.w, h: el.h };
+    if (el.type === 'image') {
+      return getImageOverlayBounds(el as ImageElement, pn, this.imageEdits());
+    }
+    if (el.type === 'text') {
+      const raw = pg.textElements.find((t) => t.id === el.id);
+      if (!raw) return { x: el.x, y: el.y, w: el.w, h: el.h };
+      const l = this.layoutEdits()[pn]?.[el.id];
+      return {
+        x: l?.x ?? raw.x,
+        y: l?.y ?? raw.y,
+        w: l?.w ?? raw.w,
+        h: l?.h ?? raw.h,
+      };
+    }
+    return { x: el.x, y: el.y, w: el.w, h: el.h };
+  }
+
+  /** Bounding boxes of every other placed element on the page (for non-overlap while dragging). */
+  private placementObstacleRects(pn: number, excludeId: string): { x: number; y: number; w: number; h: number }[] {
+    const pg = this.pages().find((p) => p.pageNum === pn);
+    if (!pg) return [];
+    const list: SelElement[] = [
+      ...pg.textElements,
+      ...pg.shapes,
+      ...pg.images,
+      ...(this.addedImages()[pn] || []),
+      ...(this.addedVideos()[pn] || []),
+      ...(this.addedTables()[pn] || []),
+      ...(this.addedRichTexts()[pn] || []),
+    ];
+    const out: { x: number; y: number; w: number; h: number }[] = [];
+    for (const el of list) {
+      if (el.id === excludeId) continue;
+      if (el.type === 'image' && this.imageEdits()[pn]?.[el.id]?.removed) continue;
+      out.push(this.elementPageBounds(el, pn));
+    }
+    return out;
   }
 
   overlayBounds(el: SelElement): { x: number; y: number; w: number; h: number } {

@@ -18,6 +18,8 @@ export class InlineEditorComponent implements AfterViewInit {
 
   readonly save = output<string>();
   readonly cancel = output<void>();
+  /** Remove PDF text from the page (empty edit + cover overlay — same as canvas ×). */
+  readonly resetEdits = output<void>();
 
   private readonly editable = viewChild<ElementRef<HTMLDivElement>>('editable');
 
@@ -89,5 +91,11 @@ export class InlineEditorComponent implements AfterViewInit {
       e.preventDefault();
       this.cancel.emit();
     }
+  }
+
+  onResetEditsClick(e: Event): void {
+    e.preventDefault();
+    e.stopPropagation();
+    this.resetEdits.emit();
   }
 }
