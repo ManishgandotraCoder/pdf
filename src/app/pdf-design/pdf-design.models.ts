@@ -139,6 +139,16 @@ export interface ProposalSection {
   id: string;
   catalogId: string;
   title: string;
+  /** Mandatory sections cannot be deleted or moved. */
+  mandatory?: boolean;
+  /** Per-section page margin settings (editor-only for now). */
+  margins?: { top: number; right: number; bottom: number; left: number };
+  /**
+   * Section start page (1-based, inclusive).
+   * In this editor, sections are “picked from content” by choosing which page they start on.
+   * Cover/Acceptance are computed and do not need this value.
+   */
+  startPageNum?: number;
 }
 
 export interface HistorySnapshot {

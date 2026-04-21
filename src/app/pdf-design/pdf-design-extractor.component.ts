@@ -92,6 +92,8 @@ export class PdfDesignExtractorComponent {
   private openedPdfId: string | null = null;
   private readonly w = globalThis;
 
+  private readonly mandatoryCatalogIds = new Set<string>(['cover', 'acceptance']);
+
   /** Read-only preview tab: hides editor chrome (see `?preview=1`). */
   readonly previewMode = toSignal(
     this.route.queryParamMap.pipe(map((m) => m.get('preview') === '1')),
@@ -102,10 +104,15 @@ export class PdfDesignExtractorComponent {
   readonly proposalSections = signal<ProposalSection[]>([]);
   readonly addSectionModalOpen = signal(false);
   readonly sectionModalDraft = signal<ProposalSection[]>([]);
+  /** Which section is considered active for the UI (based on selected page). */
+  readonly activeSectionId = signal<string>('sec_mandatory_cover');
   readonly exportMenuOpen = signal(false);
+  readonly sectionsMenuOpen = signal(false);
   private sectionDragKey: string | null = null;
 
   readonly sectionCatalog = PROPOSAL_SECTION_CATALOG;
+  /** Headings detected from the PDF content for section picking. */
+  readonly detectedHeadings = computed(() => this.detectHeadingsFromPages(this.pages()));
 
   readonly pages = signal<PageData[]>([]);
   readonly loading = signal(false);
@@ -271,6 +278,333 @@ export class PdfDesignExtractorComponent {
     });
   }
 
+  private defaultMargins(): NonNullable<ProposalSection['margins']> {
+    return { top: 48, right: 48, bottom: 48, left: 48 };
+  }
+
+  private headingForPage(pageNum: number): string | null {
+    const hit = this.detectedHeadings().find((h) => h.pageNum === pageNum) || null;
+    return hit?.title ?? null;
+  }
+
+  private detectHeadingsFromPages(pages: PageData[]): { key: string; title: string; pageNum: number }[] {
+    // Heuristic: pick the largest text element in the top 25% of each page.
+    const out: { key: string; title: string; pageNum: number }[] = [];
+    const seen = new Set<string>();
+    for (const pg of pages) {
+      const topCutoff = pg.height * 0.25;
+      const candidates = (pg.textElements || [])
+        .filter((t) => (t?.content || '').trim().length >= 3)
+        .filter((t) => t.y <= topCutoff)
+        .filter((t) => (t.style?.fontSize ?? 0) >= 10)
+        .sort((a, b) => (b.style?.fontSize ?? 0) - (a.style?.fontSize ?? 0));
+      const best = candidates[0];
+      if (!best) continue;
+      const title = best.content.trim().replace(/\s+/g, ' ').slice(0, 80);
+      const norm = title.toLowerCase();
+      if (!title) continue;
+      // Keep duplicates if they occur on different pages but same heading is common (e.g. footer),
+      // so only dedupe when it repeats on adjacent pages.
+      const adjKey = `${norm}::${pg.pageNum}`;
+      if (seen.has(adjKey)) continue;
+      seen.add(adjKey);
+      out.push({ key: `h_${pg.pageNum}_${best.id}`, title, pageNum: pg.pageNum });
+    }
+    return out;
+  }
+
+  private buildMandatorySections(): ProposalSection[] {
+    const n = this.pages().length;
+    const coverTitle = this.headingForPage(1) ?? 'Cover Page';
+    const acceptanceTitle = this.headingForPage(Math.max(1, n)) ?? 'Acceptance Page';
+    return [
+      {
+        id: 'sec_mandatory_cover',
+        catalogId: 'cover',
+        title: coverTitle,
+        mandatory: true,
+        margins: this.defaultMargins(),
+        startPageNum: 1,
+      },
+      {
+        id: 'sec_mandatory_acceptance',
+        catalogId: 'acceptance',
+        title: acceptanceTitle,
+        mandatory: true,
+        margins: this.defaultMargins(),
+        startPageNum: Math.max(1, n),
+      },
+    ];
+  }
+
+  private normalizeSections(input: ProposalSection[]): ProposalSection[] {
+    const base = Array.isArray(input) ? input : [];
+    const [cover, acceptance] = this.buildMandatorySections();
+    const middle = base
+      .filter((s) => !this.mandatoryCatalogIds.has(s.catalogId))
+      .map((s) => ({
+        ...s,
+        mandatory: false,
+        margins: s.margins ?? this.defaultMargins(),
+        startPageNum: s.startPageNum,
+      }));
+    return [cover!, ...middle, acceptance!];
+  }
+
+  /** Ensures `proposalSections` always contains Cover first, Acceptance last. */
+  private ensureMandatorySections(): void {
+    const normalized = this.normalizeSections(this.proposalSections());
+    const cur = this.proposalSections();
+    const same =
+      cur.length === normalized.length &&
+      cur.every((c, i) => c.catalogId === normalized[i]!.catalogId && c.title === normalized[i]!.title);
+    if (!same) this.proposalSections.set(normalized);
+  }
+
+  private hasOnlyMandatorySections(list: ProposalSection[]): boolean {
+    const secs = Array.isArray(list) ? list : [];
+    if (secs.length <= 2) return true;
+    return secs.every((s) => this.isMandatorySection(s) || this.mandatoryCatalogIds.has(s.catalogId));
+  }
+
+  /**
+   * Default behavior: select all sections from detected headings.
+   * Only applies when there is no existing (saved) section structure beyond mandatory.
+   */
+  private seedAllSectionsFromDetectedHeadingsIfEmpty(): void {
+    const cur = this.proposalSections();
+    if (!this.hasOnlyMandatorySections(cur)) return;
+    const pages = this.pages();
+    if (pages.length < 1) return;
+
+    const n = pages.length;
+    const headings = this.detectedHeadings()
+      .filter((h) => h.pageNum !== 1 && h.pageNum !== n)
+      .sort((a, b) => a.pageNum - b.pageNum);
+
+    const middle: ProposalSection[] = headings.map((h) => ({
+      id: `sec_auto_${h.pageNum}_${Math.random().toString(36).slice(2, 8)}`,
+      catalogId: `detected:${h.pageNum}`,
+      title: h.title,
+      mandatory: false,
+      margins: this.defaultMargins(),
+      startPageNum: h.pageNum,
+    }));
+
+    this.proposalSections.set(this.normalizeSections(middle));
+    this.activeSectionId.set('sec_mandatory_cover');
+  }
+
+  isMandatorySection(sec: ProposalSection): boolean {
+    return !!sec.mandatory || this.mandatoryCatalogIds.has(sec.catalogId);
+  }
+
+  sectionLabel(sec: ProposalSection): string {
+    return this.isMandatorySection(sec) ? `${sec.title} *` : sec.title;
+  }
+
+  /** Map a section click to a reasonable page jump (single-page canvas UI). */
+  goToSection(sec: ProposalSection): void {
+    const pages = this.pages();
+    if (!pages.length) return;
+    this.ensureMandatorySections();
+    const last = pages.length - 1;
+    if (sec.catalogId === 'cover') {
+      this.selPage.set(0);
+      this.activeSectionId.set(sec.id);
+      this.selEl.set(null);
+      this.editingId.set(null);
+      return;
+    }
+    if (sec.catalogId === 'acceptance') {
+      this.selPage.set(last);
+      this.activeSectionId.set(sec.id);
+      this.selEl.set(null);
+      this.editingId.set(null);
+      return;
+    }
+    const pn = this.sectionStartPageNum(sec);
+    const pageIdx = Math.min(last - 1, Math.max(1, pn - 1));
+    this.selPage.set(pageIdx);
+    this.activeSectionId.set(sec.id);
+    this.selEl.set(null);
+    this.editingId.set(null);
+  }
+
+  sectionStartPageNum(sec: ProposalSection): number {
+    const n = this.pages().length;
+    if (sec.catalogId === 'cover') return 1;
+    if (sec.catalogId === 'acceptance') return Math.max(1, n);
+    const v = sec.startPageNum;
+    if (typeof v === 'number' && Number.isFinite(v)) {
+      // clamp to inner pages when possible
+      if (n >= 3) return Math.min(Math.max(2, v), n - 1);
+      return Math.min(Math.max(1, v), n);
+    }
+    // default to page 2 when we have enough pages
+    return n >= 2 ? 2 : 1;
+  }
+
+  sectionRange(sec: ProposalSection): { start: number; end: number } {
+    const n = this.pages().length;
+    if (!n) return { start: 1, end: 1 };
+    const secs = this.proposalSections();
+    const start = this.sectionStartPageNum(sec);
+    const nextStart = secs
+      .filter((s) => s.id !== sec.id)
+      .map((s) => this.sectionStartPageNum(s))
+      .filter((pn) => pn > start)
+      .sort((a, b) => a - b)[0];
+    const end = Math.min(n, Math.max(start, (nextStart ?? n + 1) - 1));
+    return { start, end };
+  }
+
+  sectionRangeLabel(sec: ProposalSection): string {
+    const r = this.sectionRange(sec);
+    return r.start === r.end ? `p${r.start}` : `p${r.start}–p${r.end}`;
+  }
+
+  deletePagesForSection(sec: ProposalSection): void {
+    const pages = this.pages();
+    const n = pages.length;
+    if (!n) return;
+    if (this.isMandatorySection(sec)) {
+      alert('Cannot delete pages for mandatory sections.');
+      return;
+    }
+    const r = this.sectionRange(sec);
+    // Never delete cover (p1) or acceptance (plast).
+    const start = Math.max(2, r.start);
+    const end = Math.min(n - 1, r.end);
+    if (start > end) {
+      alert('This section has no deletable pages (cover and acceptance pages are protected).');
+      return;
+    }
+    const count = end - start + 1;
+    if (
+      !confirm(
+        `Delete ${count} page${count === 1 ? '' : 's'} in “${sec.title}” (${start === end ? `p${start}` : `p${start}–p${end}`})? Undo is available.`,
+      )
+    ) {
+      return;
+    }
+    this.deletePagesByPageNumRange(start, end);
+  }
+
+  private deletePagesByPageNumRange(startPn: number, endPn: number): void {
+    const pages = this.pages();
+    if (!pages.length) return;
+    const n = pages.length;
+    const start = Math.min(Math.max(1, startPn), n);
+    const end = Math.min(Math.max(1, endPn), n);
+    const a = Math.min(start, end);
+    const b = Math.max(start, end);
+    const removed: number[] = [];
+    for (let pn = a; pn <= b; pn++) removed.push(pn);
+    if (removed.length >= n) {
+      alert('A PDF must keep at least one page.');
+      return;
+    }
+
+    this.captureBeforeChange();
+
+    // Revoke video blobs on removed pages.
+    for (const pn of removed) {
+      ((this.addedVideos()[pn] || []) as VideoElement[]).forEach((v: VideoElement) => {
+        if (v?.src?.startsWith('blob:')) URL.revokeObjectURL(v.src);
+      });
+    }
+
+    const removedSet = new Set<number>(removed);
+    const newPages = pages
+      .filter((p) => !removedSet.has(p.pageNum))
+      .map((p, i) => ({ ...p, pageNum: i + 1 }));
+
+    // Remap page-keyed state by applying single-page remaps in ascending order.
+    const applyMany = <T extends Record<number, any>>(m: T): T => {
+      let out = m;
+      for (const pn of removed) out = remapPageKeyedState(out, pn) as T;
+      return out;
+    };
+
+    this.pages.set(newPages);
+    this.templates.set(clusterTemplates(newPages));
+    this.edits.update((prev) => applyMany(prev));
+    this.imageEdits.update((prev) => applyMany(prev));
+    this.layoutEdits.update((prev) => applyMany(prev));
+    this.addedImages.update((prev) => applyMany(prev));
+    this.addedVideos.update((prev) => applyMany(prev));
+    this.addedTables.update((prev) => applyMany(prev));
+    this.addedRichTexts.update((prev) => applyMany(prev));
+
+    // Shift section startPageNum values that occur after deleted pages.
+    const removedBefore = (pn: number) => removed.filter((x) => x < pn).length;
+    this.proposalSections.update((list) =>
+      this.normalizeSections(
+        list.map((s) => {
+          if (this.isMandatorySection(s)) return s;
+          const sp = s.startPageNum;
+          if (typeof sp !== 'number' || !Number.isFinite(sp)) return s;
+          const next = sp - removedBefore(sp);
+          return { ...s, startPageNum: Math.max(2, Math.min(next, Math.max(2, newPages.length - 1))) };
+        }),
+      ),
+    );
+    this.ensureMandatorySections();
+
+    this.selEl.set(null);
+    this.editingId.set(null);
+    const nextIdx = Math.min(Math.max(0, this.selPage()), Math.max(0, newPages.length - 1));
+    this.selPage.set(nextIdx);
+    this.setActiveSectionFromPage();
+  }
+
+  onSectionStartPageChange(sectionId: string, e: Event): void {
+    const raw = (e.target as HTMLSelectElement).value;
+    const pn = Number.parseInt(raw, 10);
+    if (!Number.isFinite(pn)) return;
+    this.sectionModalDraft.update((list) =>
+      list.map((s) => (s.id === sectionId ? { ...s, startPageNum: pn } : s)),
+    );
+  }
+
+  /** Keeps the section highlight in sync when user clicks a page thumbnail. */
+  setActiveSectionFromPage(): void {
+    this.ensureMandatorySections();
+    const secs = this.proposalSections();
+    const pages = this.pages();
+    if (!secs.length || !pages.length) return;
+    const pageIdx = this.selPage();
+    if (pageIdx <= 0) {
+      this.activeSectionId.set(secs[0]!.id);
+      return;
+    }
+    if (pageIdx >= pages.length - 1) {
+      this.activeSectionId.set(secs[secs.length - 1]!.id);
+      return;
+    }
+    // Pick the latest section whose startPageNum is <= current pageNum
+    const curPn = pageIdx + 1;
+    const mids = secs.filter((s) => !this.isMandatorySection(s));
+    let best: ProposalSection | null = null;
+    for (const s of mids) {
+      const sp = this.sectionStartPageNum(s);
+      if (sp <= curPn && (!best || sp >= this.sectionStartPageNum(best))) best = s;
+    }
+    this.activeSectionId.set(best?.id ?? secs[0]!.id);
+  }
+
+  patchActiveSectionMargins(patch: Partial<NonNullable<ProposalSection['margins']>>): void {
+    const activeId = this.activeSectionId();
+    this.proposalSections.update((list) =>
+      list.map((s) => {
+        if (s.id !== activeId) return s;
+        const next = { ...(s.margins ?? this.defaultMargins()), ...patch };
+        return { ...s, margins: next };
+      }),
+    );
+  }
+
   private resetEditorStateForNewLoad(): void {
     this.loading.set(true);
     this.progress.set(0);
@@ -289,6 +623,8 @@ export class PdfDesignExtractorComponent {
     this.historyStack = [];
     this.redoStack = [];
     this.historyUi.update((u) => u + 1);
+    this.activeSectionId.set('sec_mandatory_cover');
+    this.proposalSections.set(this.normalizeSections([]));
   }
 
   private computeCenteredPlacementRect(
@@ -578,6 +914,10 @@ export class PdfDesignExtractorComponent {
       fonts: [...af].slice(0, 12),
       sizes: [...asz].sort((a, b) => a - b).slice(0, 20),
     });
+
+    // Default: auto-select sections from document headings.
+    this.ensureMandatorySections();
+    this.seedAllSectionsFromDetectedHeadingsIfEmpty();
   }
 
   private async applySavedStateForPdf(pdfId: string): Promise<void> {
@@ -602,7 +942,7 @@ export class PdfDesignExtractorComponent {
       }>;
 
       if (s.tokens) this.tokens.set(s.tokens);
-      if (Array.isArray(s.proposalSections)) this.proposalSections.set(s.proposalSections);
+      if (Array.isArray(s.proposalSections)) this.proposalSections.set(this.normalizeSections(s.proposalSections));
       if (s.edits) this.edits.set(s.edits);
       if (s.imageEdits) this.imageEdits.set(s.imageEdits);
       if (s.layoutEdits) this.layoutEdits.set(s.layoutEdits);
@@ -625,6 +965,8 @@ export class PdfDesignExtractorComponent {
         const maxIdx = Math.max(0, this.pages().length - 1);
         this.selPage.set(Math.min(Math.max(0, s.selPage), maxIdx));
       }
+      this.ensureMandatorySections();
+      this.seedAllSectionsFromDetectedHeadingsIfEmpty();
     } catch (err: unknown) {
       console.error(err);
     }
@@ -1475,7 +1817,8 @@ export class PdfDesignExtractorComponent {
     this.addedVideos.set({});
     this.addedTables.set({});
     this.addedRichTexts.set({});
-    this.proposalSections.set([]);
+    this.proposalSections.set(this.normalizeSections([]));
+    this.activeSectionId.set('sec_mandatory_cover');
     this.historyStack = [];
     this.redoStack = [];
     this.historyUi.update((u) => u + 1);
@@ -1598,6 +1941,18 @@ export class PdfDesignExtractorComponent {
   }
 
   sendForApproval(): void {
+    this.ensureMandatorySections();
+    const secs = this.proposalSections();
+    const first = secs[0];
+    const last = secs[secs.length - 1];
+    if (!first || first.catalogId !== 'cover') {
+      alert('Cannot send for approval: Cover Page is mandatory and must be first.');
+      return;
+    }
+    if (!last || last.catalogId !== 'acceptance') {
+      alert('Cannot send for approval: Acceptance Page is mandatory and must be last.');
+      return;
+    }
     this.approvalStatus.set('in_review');
   }
 
@@ -1960,6 +2315,7 @@ export class PdfDesignExtractorComponent {
   }
 
   openAddSectionModal(): void {
+    this.ensureMandatorySections();
     this.sectionModalDraft.set(structuredClone(this.proposalSections()));
     this.addSectionModalOpen.set(true);
   }
@@ -1970,26 +2326,94 @@ export class PdfDesignExtractorComponent {
 
   saveAddSectionModal(): void {
     this.captureBeforeChange();
-    this.proposalSections.set(structuredClone(this.sectionModalDraft()));
+    this.proposalSections.set(this.normalizeSections(structuredClone(this.sectionModalDraft())));
+    this.ensureMandatorySections();
     this.addSectionModalOpen.set(false);
   }
 
   addCatalogSectionToModal(catalogId: string, title: string): void {
+    if (this.mandatoryCatalogIds.has(catalogId)) return;
     const exists = this.sectionModalDraft().some((s) => s.catalogId === catalogId);
     if (exists) return;
     const row: ProposalSection = {
       id: `sec_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
       catalogId,
       title,
+      mandatory: false,
+      margins: this.defaultMargins(),
     };
     this.sectionModalDraft.update((list) => [...list, row]);
   }
 
+  addDetectedHeadingToModal(h: { title: string; pageNum: number }): void {
+    const title = h.title.trim();
+    if (!title) return;
+    const exists = this.sectionModalDraft().some((s) => s.title.trim().toLowerCase() === title.toLowerCase());
+    if (exists) return;
+    const row: ProposalSection = {
+      id: `sec_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      catalogId: `detected:${h.pageNum}`,
+      title,
+      mandatory: false,
+      margins: this.defaultMargins(),
+      startPageNum: h.pageNum,
+    };
+    this.sectionModalDraft.update((list) => [...list, row]);
+  }
+
+  toggleSectionsMenu(): void {
+    this.sectionsMenuOpen.update((v) => !v);
+  }
+
+  closeSectionsMenu(): void {
+    this.sectionsMenuOpen.set(false);
+  }
+
+  addDetectedHeadingAsSection(h: { title: string; pageNum: number }): void {
+    const title = h.title.trim();
+    if (!title) return;
+    const exists = this.proposalSections().some((s) => s.title.trim().toLowerCase() === title.toLowerCase());
+    if (exists) return;
+    this.captureBeforeChange();
+    const row: ProposalSection = {
+      id: `sec_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      catalogId: `detected:${h.pageNum}`,
+      title,
+      mandatory: false,
+      margins: this.defaultMargins(),
+      startPageNum: h.pageNum,
+    };
+    this.proposalSections.update((list) => this.normalizeSections([...list, row]));
+    this.ensureMandatorySections();
+    this.sectionsMenuOpen.set(false);
+  }
+
+  removeSection(sec: ProposalSection): void {
+    if (this.isMandatorySection(sec)) return;
+    this.captureBeforeChange();
+    this.proposalSections.update((list) => this.normalizeSections(list.filter((s) => s.id !== sec.id)));
+    this.ensureMandatorySections();
+    if (this.activeSectionId() === sec.id) this.activeSectionId.set('sec_mandatory_cover');
+  }
+
+  detectedHeadingsNotSelected(): { key: string; title: string; pageNum: number }[] {
+    const secs = this.proposalSections();
+    const titles = new Set(secs.map((s) => s.title.trim().toLowerCase()).filter(Boolean));
+    return this.detectedHeadings().filter((h) => !titles.has(h.title.trim().toLowerCase()));
+  }
+
   removeSectionFromModal(id: string): void {
+    const row = this.sectionModalDraft().find((s) => s.id === id);
+    if (row?.mandatory || this.mandatoryCatalogIds.has(row?.catalogId || '')) return;
     this.sectionModalDraft.update((list) => list.filter((s) => s.id !== id));
   }
 
   onSectionDragStart(e: DragEvent, id: string): void {
+    const row = this.sectionModalDraft().find((s) => s.id === id);
+    if (row?.mandatory || this.mandatoryCatalogIds.has(row?.catalogId || '')) {
+      e.preventDefault();
+      return;
+    }
     this.sectionDragKey = id;
     e.dataTransfer?.setData('text/plain', id);
     e.dataTransfer!.effectAllowed = 'move';
@@ -2009,6 +2433,9 @@ export class PdfDesignExtractorComponent {
       const i = list.findIndex((x) => x.id === from);
       const j = list.findIndex((x) => x.id === targetId);
       if (i < 0 || j < 0) return list;
+      const fromRow = list[i];
+      const toRow = list[j];
+      if (fromRow?.mandatory || toRow?.mandatory) return list;
       const n = [...list];
       const [item] = n.splice(i, 1);
       n.splice(j, 0, item);
@@ -2101,30 +2528,28 @@ export class PdfDesignExtractorComponent {
       const pptxgen = (await import('pptxgenjs')).default;
       const pptx = new pptxgen();
       pptx.title = this.pdfTitle() || 'Proposal';
-      const s1 = pptx.addSlide();
-      s1.addText(this.pdfTitle() || 'Proposal', {
-        x: 0.5,
-        y: 1.2,
-        w: 9,
-        fontSize: 28,
-        bold: true,
-        color: '0f172a',
-      });
-      const secLines = this.proposalSections();
-      const bulletParts =
-        secLines.length > 0
-          ? secLines.map((s) => ({ text: s.title, options: { bullet: true as const } }))
-          : [{ text: 'Add sections from the editor', options: { bullet: true as const } }];
-      s1.addText(bulletParts, { x: 0.6, y: 2.4, w: 8.8, fontSize: 14, color: '334155' });
-      const s2 = pptx.addSlide();
-      s2.addText(`Document pages: ${this.pages().length}`, { x: 0.5, y: 1, fontSize: 20, bold: true });
-      s2.addText('This export is a summary deck. For pixel-perfect pages, export PDF.', {
-        x: 0.5,
-        y: 1.8,
-        w: 9,
-        fontSize: 12,
-        color: '64748b',
-      });
+      this.ensureMandatorySections();
+      const secs = this.proposalSections();
+      const list = secs.length ? secs : this.normalizeSections([]);
+      for (const sec of list) {
+        const slide = pptx.addSlide();
+        slide.addText(this.sectionLabel(sec), {
+          x: 0.6,
+          y: 0.8,
+          w: 9,
+          fontSize: 28,
+          bold: true,
+          color: '0f172a',
+        });
+        const m = sec.margins ?? this.defaultMargins();
+        slide.addText(`Margins — T:${m.top} R:${m.right} B:${m.bottom} L:${m.left}`, {
+          x: 0.6,
+          y: 1.6,
+          w: 9,
+          fontSize: 12,
+          color: '64748b',
+        });
+      }
       await pptx.writeFile({ fileName: `${this.sanitizeFilename(this.pdfTitle())}.pptx` });
     } catch (e: unknown) {
       alert('PPTX export failed: ' + (e instanceof Error ? e.message : String(e)));
@@ -2136,6 +2561,8 @@ export class PdfDesignExtractorComponent {
     const t = ev.target as HTMLElement;
     if (t.closest('[data-export-menu]')) return;
     this.exportMenuOpen.set(false);
+    if (t.closest('[data-sections-menu]')) return;
+    this.sectionsMenuOpen.set(false);
   }
 
   goBackToList(): void {

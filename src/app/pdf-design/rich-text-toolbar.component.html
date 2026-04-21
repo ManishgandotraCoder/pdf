@@ -1,18 +1,15 @@
 <div data-rich-toolbar class="rich-text-toolbar-wrap">
   <fieldset class="rt-toolbar__group">
     <legend class="rt-toolbar__legend">Font</legend>
-    <select
+    <app-select-field
       class="rt-select"
-      title="Font"
+      ariaLabel="Font"
+      placeholder="Font…"
       [disabled]="disabled()"
+      [options]="fontsForSelect()"
       [value]="fontSelectModel()"
-      (change)="onFontChange($event)"
-    >
-      <option value="" disabled>Font…</option>
-      @for (f of fontsForSelect(); track f) {
-        <option [value]="f">{{ f }}</option>
-      }
-    </select>
+      (valueChange)="onFontValueChange($event)"
+    />
     <input
       type="text"
       inputmode="numeric"

@@ -82,6 +82,77 @@ select:focus-visible {
   outline-offset: 2px;
 }
 
+/* ----- Shared: Select Field ----- */
+.sf {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.sf__label {
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.sf__control {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.sf__select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  width: 100%;
+  padding: 8px 32px 8px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  background: #ffffff;
+  color: #0f172a;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+
+.sf__select:hover:not(:disabled) {
+  border-color: rgba(13, 148, 136, 0.35);
+  box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.08), 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+
+.sf__select:focus {
+  outline: none;
+  border-color: rgba(13, 148, 136, 0.55);
+  box-shadow: 0 0 0 4px rgba(13, 148, 136, 0.16), 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+
+.sf__select:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.sf__chev {
+  position: absolute;
+  right: 10px;
+  pointer-events: none;
+  color: #64748b;
+}
+
+.sf__meta {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.sf__meta--error {
+  color: var(--danger);
+}
+
 /* Scrollbars */
 ::-webkit-scrollbar {
   width: 8px;

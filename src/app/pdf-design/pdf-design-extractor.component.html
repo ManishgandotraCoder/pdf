@@ -29,33 +29,148 @@
     </div>
     <div class="sidebar__scroll">
       <div class="sidebar__section-label">Proposal sections</div>
-      @if (proposalSections().length === 0) {
-      <p style="font-size: 10px; color: #94a3b8; padding: 0 4px 10px; line-height: 1.4">
-        Use <strong>the section picker</strong> to build your outline.
-      </p>
-      } @else {
-      <ul style="list-style: none; margin: 0 0 12px; padding: 0 4px">
-        @for (sec of proposalSections(); track sec.id) {
-        <li style="
-                  font-size: 11px;
-                  font-weight: 600;
-                  color: #334155;
-                  padding: 6px 8px;
-                  margin-bottom: 4px;
-                  border-radius: 6px;
-                  background: #f1f5f9;
-                  border: 1px solid #e2e8f0;
+      <div data-sections-menu style="position: relative; padding: 0 4px 10px">
+        <button type="button" (click)="toggleSectionsMenu()" style="
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            padding: 8px 10px;
+            border-radius: 10px;
+            border: 1px solid rgba(15,23,42,0.12);
+            background: #ffffff;
+            color: #0f172a;
+            font-size: 12px;
+            font-weight: 800;
+            cursor: pointer;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+          " [attr.aria-expanded]="sectionsMenuOpen()">
+          <span>Sections</span>
+          <span style="display:flex; align-items:center; gap:10px; color:#64748b; font-weight:800">
+            {{ proposalSections().length }}
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              aria-hidden="true">
+              <path d="M6 9l6 6 6-6" />
+            </svg>
+          </span>
+        </button>
+
+        @if (sectionsMenuOpen()) {
+        <div style="
+            position: absolute;
+            top: 44px;
+            left: 0;
+            right: 0;
+            z-index: 50;
+            background: #fff;
+            border: 1px solid rgba(15,23,42,0.12);
+            border-radius: 12px;
+            box-shadow: 0 10px 28px rgba(15,23,42,0.18);
+            overflow: hidden;
+          ">
+          <div style="padding: 10px 10px 8px; border-bottom: 1px solid rgba(15,23,42,0.08)">
+            <div
+              style="font-size: 10px; font-weight: 900; letter-spacing: 0.08em; color: #94a3b8; text-transform: uppercase">
+              Selected
+            </div>
+          </div>
+          <div style="max-height: 220px; overflow: auto">
+            @for (sec of proposalSections(); track sec.id) {
+            @let locked = isMandatorySection(sec);
+            <div
+              style="display:flex; align-items:center; gap:10px; padding: 10px; border-bottom: 1px solid rgba(15,23,42,0.06)">
+              <button type="button" (click)="goToSection(sec); closeSectionsMenu()" style="
+                  flex: 1;
+                  text-align: left;
+                  border: none;
+                  background: transparent;
+                  padding: 0;
+                  cursor: pointer;
                 ">
-          {{ sec.title }}
-        </li>
+                <div style="font-size: 12px; font-weight: 900; color: #0f172a; line-height: 1.15">
+                  {{ sectionLabel(sec) }}
+                </div>
+                <div style="font-size: 10px; font-weight: 800; color: #64748b; margin-top: 2px">
+                  {{ sectionRangeLabel(sec) }}
+                </div>
+              </button>
+
+              <button type="button" title="Delete pages in this section" (click)="deletePagesForSection(sec)"
+                [disabled]="locked" style="
+                  height: 32px;
+                  padding: 0 10px;
+                  border-radius: 10px;
+                  border: 1px solid rgba(185, 28, 28, 0.25);
+                  background: rgba(185, 28, 28, 0.08);
+                  color: #b91c1c;
+                  font-size: 11px;
+                  font-weight: 900;
+                  cursor: pointer;
+                  white-space: nowrap;
+                " [style.opacity]="locked ? 0.35 : 1" [style.cursor]="locked ? 'not-allowed' : 'pointer'">
+                Pages
+              </button>
+
+              <button type="button" title="Remove section" (click)="removeSection(sec)" [disabled]="locked" style="
+                  width: 34px;
+                  height: 34px;
+                  border-radius: 10px;
+                  border: 1px solid rgba(15,23,42,0.12);
+                  background: #fff;
+                  color: #0f172a;
+                  cursor: pointer;
+                " [style.opacity]="locked ? 0.35 : 1" [style.cursor]="locked ? 'not-allowed' : 'pointer'">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                  aria-hidden="true">
+                  <path d="M3 6h18M8 6V4h8v2M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M10 11v6M14 11v6" />
+                </svg>
+              </button>
+            </div>
+            }
+          </div>
+
+          <div style="padding: 10px 10px 8px; border-bottom: 1px solid rgba(15,23,42,0.08)">
+            <div
+              style="font-size: 10px; font-weight: 900; letter-spacing: 0.08em; color: #94a3b8; text-transform: uppercase">
+              Add from document
+            </div>
+          </div>
+          <div style="max-height: 220px; overflow: auto">
+            @if (detectedHeadingsNotSelected().length === 0) {
+            <div style="padding: 12px 10px; color:#94a3b8; font-size: 12px; font-weight: 700">
+              No more headings to add.
+            </div>
+            } @else {
+            @for (h of detectedHeadingsNotSelected(); track h.key) {
+            <button type="button" (click)="addDetectedHeadingAsSection(h)" style="
+                width: 100%;
+                text-align: left;
+                padding: 10px;
+                border: none;
+                background: #fff;
+                cursor: pointer;
+                border-bottom: 1px solid rgba(15,23,42,0.06);
+              " title="Add section">
+              <div style="font-size: 12px; font-weight: 900; color: #0f172a; line-height: 1.15">
+                {{ h.title }}
+              </div>
+              <div style="font-size: 10px; font-weight: 800; color: #64748b; margin-top: 2px">
+                Start p{{ h.pageNum }}
+              </div>
+            </button>
+            }
+            }
+          </div>
+        </div>
         }
-      </ul>
-      }
+      </div>
+
       <div class="sidebar__section-label">
         Pages
       </div>
       @for (p of pages(); track p.pageNum; let idx = $index) {
-      <div (click)="selPage.set(idx); selEl.set(null); editingId.set(null)" style="
+      <div (click)="selPage.set(idx); selEl.set(null); editingId.set(null); setActiveSectionFromPage()" style="
               margin-bottom: 8px;
               cursor: pointer;
               border-radius: 6px;
@@ -806,6 +921,49 @@
       </div>
     </div>
 
+    <div class="inspector__block">
+      <div class="inspector__section-title">Active section</div>
+      @let secs = proposalSections();
+      @let active = secs.find((s) => s.id === activeSectionId());
+      @if (active) {
+      <div style="font-size: 12px; font-weight: 800; color: #0f172a; margin-bottom: 10px">
+        {{ sectionLabel(active) }}
+      </div>
+      <div style="font-size: 10px; color: #64748b; margin-bottom: 8px">
+        Page margins (per section)
+      </div>
+      @let m = active.margins || { top: 48, right: 48, bottom: 48, left: 48 };
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px">
+        <label style="display:flex; flex-direction:column; gap:4px; font-size:10px; color:#64748b">
+          Top
+          <input type="number" min="0" max="300" [value]="m.top"
+            (input)="patchActiveSectionMargins({ top: clampInt($event, 0, 300) })"
+            style="padding: 6px 8px; border-radius: 6px; border: 1px solid #d1d9e0; font-size: 12px" />
+        </label>
+        <label style="display:flex; flex-direction:column; gap:4px; font-size:10px; color:#64748b">
+          Right
+          <input type="number" min="0" max="300" [value]="m.right"
+            (input)="patchActiveSectionMargins({ right: clampInt($event, 0, 300) })"
+            style="padding: 6px 8px; border-radius: 6px; border: 1px solid #d1d9e0; font-size: 12px" />
+        </label>
+        <label style="display:flex; flex-direction:column; gap:4px; font-size:10px; color:#64748b">
+          Bottom
+          <input type="number" min="0" max="300" [value]="m.bottom"
+            (input)="patchActiveSectionMargins({ bottom: clampInt($event, 0, 300) })"
+            style="padding: 6px 8px; border-radius: 6px; border: 1px solid #d1d9e0; font-size: 12px" />
+        </label>
+        <label style="display:flex; flex-direction:column; gap:4px; font-size:10px; color:#64748b">
+          Left
+          <input type="number" min="0" max="300" [value]="m.left"
+            (input)="patchActiveSectionMargins({ left: clampInt($event, 0, 300) })"
+            style="padding: 6px 8px; border-radius: 6px; border: 1px solid #d1d9e0; font-size: 12px" />
+        </label>
+      </div>
+      } @else {
+      <div style="font-size: 11px; color: #94a3b8">No sections.</div>
+      }
+    </div>
+
     @if (inspectorTab() === 'assets') {
     <div class="inspector__block">
       <div class="inspector__section-title">Saved assets</div>
@@ -1326,103 +1484,6 @@
     </div>
     }
     }
-  </div>
-</div>
-}
-
-@if (addSectionModalOpen()) {
-<div class="modal-backdrop" (click)="closeAddSectionModal()">
-  <div class="modal-panel modal-panel--wide" role="dialog" aria-modal="true" aria-labelledby="add-section-title"
-    (click)="$event.stopPropagation()">
-    <h2 id="add-section-title" class="modal-panel__title">Add new section</h2>
-    <p style="font-size: 12px; color: #64748b; margin-bottom: 12px; line-height: 1.45">
-      Choose sections below, drag to reorder, or remove with the trash icon. Save adds them to the left panel outline.
-    </p>
-    <div style="margin-bottom: 14px">
-      <div
-        style="font-size: 10px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 8px">
-        Your outline
-      </div>
-      @if (sectionModalDraft().length === 0) {
-      <div
-        style="padding: 16px; text-align: center; color: #94a3b8; font-size: 12px; border: 1px dashed #cbd5e1; border-radius: 8px">
-        No sections yet — add from the catalog below.
-      </div>
-      } @else {
-      <ul style="list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px">
-        @for (row of sectionModalDraft(); track row.id) {
-        <li draggable="true" (dragstart)="onSectionDragStart($event, row.id)" (dragover)="onSectionDragOver($event)"
-          (drop)="onSectionDrop($event, row.id)" style="
-                  display: flex;
-                  align-items: center;
-                  gap: 8px;
-                  padding: 8px 10px;
-                  background: #f8fafc;
-                  border: 1px solid #e2e8f0;
-                  border-radius: 8px;
-                  cursor: grab;
-                ">
-          <span style="font-size: 12px; font-weight: 700; color: #0f172a; flex: 1">{{ row.title }}</span>
-          <button type="button" title="Remove" (click)="removeSectionFromModal(row.id)" style="
-                    width: 32px;
-                    height: 32px;
-                    padding: 0;
-                    border: none;
-                    background: transparent;
-                    color: #94a3b8;
-                    cursor: pointer;
-                    border-radius: 6px;
-                  ">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-              aria-hidden="true">
-              <path d="M3 6h18M8 6V4h8v2M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M10 11v6M14 11v6" />
-            </svg>
-          </button>
-        </li>
-        }
-      </ul>
-      }
-    </div>
-    <div style="margin-bottom: 16px">
-      <div
-        style="font-size: 10px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 8px">
-        Available sections
-      </div>
-      <div style="display: flex; flex-wrap: wrap; gap: 8px">
-        @for (c of sectionCatalog; track c.id) {
-        <button type="button" (click)="addCatalogSectionToModal(c.id, c.title)" style="
-                padding: 6px 10px;
-                font-size: 11px;
-                font-weight: 600;
-                border-radius: 999px;
-                border: 1px solid rgba(13, 148, 136, 0.35);
-                background: rgba(13, 148, 136, 0.08);
-                color: #0f766e;
-                cursor: pointer;
-              ">
-          + {{ c.title }}
-        </button>
-        }
-      </div>
-    </div>
-    <div style="display: flex; justify-content: flex-end; gap: 8px">
-      <button type="button" (click)="closeAddSectionModal()"
-        style="padding: 8px 14px; border-radius: 8px; border: 1px solid #e2e8f0; background: #fff; font-size: 12px; font-weight: 600; cursor: pointer">
-        Cancel
-      </button>
-      <button type="button" (click)="saveAddSectionModal()" style="
-            padding: 8px 14px;
-            border-radius: 8px;
-            border: 1px solid rgba(13, 148, 136, 0.45);
-            background: #0d9488;
-            color: #fff;
-            font-size: 12px;
-            font-weight: 700;
-            cursor: pointer;
-          ">
-        Save
-      </button>
-    </div>
   </div>
 </div>
 }

@@ -1,4 +1,5 @@
 import { Component, DestroyRef, ElementRef, inject, input, NgZone, signal } from '@angular/core';
+import { SelectFieldComponent } from '../shared/select-field/select-field.component';
 
 import {
   applyFontSizePx,
@@ -15,6 +16,7 @@ import {
 @Component({
   selector: 'app-rich-text-toolbar',
   standalone: true,
+  imports: [SelectFieldComponent],
   templateUrl: './rich-text-toolbar.component.html',
 })
 export class RichTextToolbarComponent {
@@ -149,6 +151,15 @@ export class RichTextToolbarComponent {
   onFontChange(e: Event): void {
     const sel = e.target as HTMLSelectElement;
     const v = sel.value;
+    if (!v) return;
+    restoreRichTextSelection();
+    expandToAllIfCollapsed();
+    execRich('fontName', v);
+    saveRichTextSelection();
+    this.syncFromSelectionSoon();
+  }
+
+  onFontValueChange(v: string): void {
     if (!v) return;
     restoreRichTextSelection();
     expandToAllIfCollapsed();
