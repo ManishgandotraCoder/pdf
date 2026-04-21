@@ -13,8 +13,9 @@ export type PdfRecord = {
 @Injectable({ providedIn: 'root' })
 export class PdfsApiService {
   private readonly http = inject(HttpClient);
-  private readonly baseUrl = 'https://pdf-be.vercel.app';
-
+  private readonly baseUrl = 'http://localhost:8787';
+  // 'http://localhost:8787';
+  // 'https://pdf-be.vercel.app';
   listPdfs() {
     return this.http.get<{ pdfs: PdfRecord[] }>(`${this.baseUrl}/pdfs`);
   }

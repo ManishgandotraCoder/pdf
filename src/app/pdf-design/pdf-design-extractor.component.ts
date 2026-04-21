@@ -594,17 +594,6 @@ export class PdfDesignExtractorComponent {
     this.activeSectionId.set(best?.id ?? secs[0]!.id);
   }
 
-  patchActiveSectionMargins(patch: Partial<NonNullable<ProposalSection['margins']>>): void {
-    const activeId = this.activeSectionId();
-    this.proposalSections.update((list) =>
-      list.map((s) => {
-        if (s.id !== activeId) return s;
-        const next = { ...(s.margins ?? this.defaultMargins()), ...patch };
-        return { ...s, margins: next };
-      }),
-    );
-  }
-
   private resetEditorStateForNewLoad(): void {
     this.loading.set(true);
     this.progress.set(0);
@@ -2394,6 +2383,7 @@ export class PdfDesignExtractorComponent {
     this.proposalSections.update((list) => this.normalizeSections(list.filter((s) => s.id !== sec.id)));
     this.ensureMandatorySections();
     if (this.activeSectionId() === sec.id) this.activeSectionId.set('sec_mandatory_cover');
+    this.deletePagesForSection(sec)
   }
 
   detectedHeadingsNotSelected(): { key: string; title: string; pageNum: number }[] {

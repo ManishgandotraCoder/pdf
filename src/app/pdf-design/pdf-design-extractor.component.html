@@ -96,7 +96,7 @@
                 </div>
               </button>
 
-              <button type="button" title="Delete pages in this section" (click)="deletePagesForSection(sec)"
+              <!-- <button type="button" title="Delete pages in this section" (click)="deletePagesForSection(sec)"
                 [disabled]="locked" style="
                   height: 32px;
                   padding: 0 10px;
@@ -110,7 +110,7 @@
                   white-space: nowrap;
                 " [style.opacity]="locked ? 0.35 : 1" [style.cursor]="locked ? 'not-allowed' : 'pointer'">
                 Pages
-              </button>
+              </button> -->
 
               <button type="button" title="Remove section" (click)="removeSection(sec)" [disabled]="locked" style="
                   width: 34px;
@@ -129,29 +129,16 @@
             </div>
             }
           </div>
-
-          <div style="padding: 10px 10px 8px; border-bottom: 1px solid rgba(15,23,42,0.08)">
-            <div
-              style="font-size: 10px; font-weight: 900; letter-spacing: 0.08em; color: #94a3b8; text-transform: uppercase">
-              Add from document
-            </div>
-          </div>
           <div style="max-height: 220px; overflow: auto">
-            @if (detectedHeadingsNotSelected().length === 0) {
-            <div style="padding: 12px 10px; color:#94a3b8; font-size: 12px; font-weight: 700">
-              No more headings to add.
-            </div>
-            } @else {
-            @for (h of detectedHeadingsNotSelected(); track h.key) {
             <button type="button" (click)="addDetectedHeadingAsSection(h)" style="
-                width: 100%;
-                text-align: left;
-                padding: 10px;
-                border: none;
-                background: #fff;
-                cursor: pointer;
-                border-bottom: 1px solid rgba(15,23,42,0.06);
-              " title="Add section">
+            width: 100%;
+            text-align: left;
+            padding: 10px;
+            border: none;
+            background: #fff;
+            cursor: pointer;
+            border-bottom: 1px solid rgba(15,23,42,0.06);
+          " title="Add section">
               <div style="font-size: 12px; font-weight: 900; color: #0f172a; line-height: 1.15">
                 {{ h.title }}
               </div>
@@ -159,8 +146,6 @@
                 Start p{{ h.pageNum }}
               </div>
             </button>
-            }
-            }
           </div>
         </div>
         }
@@ -919,49 +904,6 @@
           <span class="tooltip-text">Remove Page</span>
         </div>
       </div>
-    </div>
-
-    <div class="inspector__block">
-      <div class="inspector__section-title">Active section</div>
-      @let secs = proposalSections();
-      @let active = secs.find((s) => s.id === activeSectionId());
-      @if (active) {
-      <div style="font-size: 12px; font-weight: 800; color: #0f172a; margin-bottom: 10px">
-        {{ sectionLabel(active) }}
-      </div>
-      <div style="font-size: 10px; color: #64748b; margin-bottom: 8px">
-        Page margins (per section)
-      </div>
-      @let m = active.margins || { top: 48, right: 48, bottom: 48, left: 48 };
-      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px">
-        <label style="display:flex; flex-direction:column; gap:4px; font-size:10px; color:#64748b">
-          Top
-          <input type="number" min="0" max="300" [value]="m.top"
-            (input)="patchActiveSectionMargins({ top: clampInt($event, 0, 300) })"
-            style="padding: 6px 8px; border-radius: 6px; border: 1px solid #d1d9e0; font-size: 12px" />
-        </label>
-        <label style="display:flex; flex-direction:column; gap:4px; font-size:10px; color:#64748b">
-          Right
-          <input type="number" min="0" max="300" [value]="m.right"
-            (input)="patchActiveSectionMargins({ right: clampInt($event, 0, 300) })"
-            style="padding: 6px 8px; border-radius: 6px; border: 1px solid #d1d9e0; font-size: 12px" />
-        </label>
-        <label style="display:flex; flex-direction:column; gap:4px; font-size:10px; color:#64748b">
-          Bottom
-          <input type="number" min="0" max="300" [value]="m.bottom"
-            (input)="patchActiveSectionMargins({ bottom: clampInt($event, 0, 300) })"
-            style="padding: 6px 8px; border-radius: 6px; border: 1px solid #d1d9e0; font-size: 12px" />
-        </label>
-        <label style="display:flex; flex-direction:column; gap:4px; font-size:10px; color:#64748b">
-          Left
-          <input type="number" min="0" max="300" [value]="m.left"
-            (input)="patchActiveSectionMargins({ left: clampInt($event, 0, 300) })"
-            style="padding: 6px 8px; border-radius: 6px; border: 1px solid #d1d9e0; font-size: 12px" />
-        </label>
-      </div>
-      } @else {
-      <div style="font-size: 11px; color: #94a3b8">No sections.</div>
-      }
     </div>
 
     @if (inspectorTab() === 'assets') {
