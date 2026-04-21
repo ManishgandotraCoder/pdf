@@ -130,6 +130,7 @@
             }
           </div>
           <div style="max-height: 220px; overflow: auto">
+            @for (h of detectedHeadingsNotSelected(); track h.key) {
             <button type="button" (click)="addDetectedHeadingAsSection(h)" style="
             width: 100%;
             text-align: left;
@@ -146,6 +147,7 @@
                 Start p{{ h.pageNum }}
               </div>
             </button>
+            }
           </div>
         </div>
         }
