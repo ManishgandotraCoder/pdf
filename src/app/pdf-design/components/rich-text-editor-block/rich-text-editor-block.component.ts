@@ -7,8 +7,8 @@ import {
   viewChild,
 } from '@angular/core';
 
-import { RichTextToolbarComponent } from './rich-text-toolbar.component';
-import { isProbablyHtml } from './rich-text.utils';
+import { RichTextToolbarComponent } from '../rich-text-toolbar/rich-text-toolbar.component';
+import { isProbablyHtml } from '../../utils/rich-text.utils';
 
 @Component({
   selector: 'app-rich-text-editor-block',

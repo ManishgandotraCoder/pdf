@@ -1,7 +1,7 @@
 import * as pdfjsLib from 'pdfjs-dist';
 import type { PDFPageProxy } from 'pdfjs-dist';
 
-import type { ImageElement, PageData, ShapeElement, TextElement } from './pdf-design.models';
+import type { ImageElement, PageData, ShapeElement, TextElement } from '../models/pdf-design.models';
 import {
   argsToHex,
   concatTransform,

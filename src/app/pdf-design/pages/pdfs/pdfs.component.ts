@@ -2,7 +2,7 @@ import { Component, computed, inject, signal } from '@angular/core';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
-import { PdfsApiService, type PdfRecord } from './pdfs-api.service';
+import { PdfsApiService, type PdfRecord } from '../../services/pdfs-api.service';
 
 @Component({
   selector: 'app-pdfs',

@@ -1,5 +1,5 @@
 import { Component, DestroyRef, ElementRef, inject, input, NgZone, signal } from '@angular/core';
-import { SelectFieldComponent } from '../shared/select-field/select-field.component';
+import { SelectFieldComponent } from '../../../shared/select-field/select-field.component';
 
 import {
   applyFontSizePx,
@@ -11,7 +11,7 @@ import {
   promptLinkUrl,
   restoreRichTextSelection,
   saveRichTextSelection,
-} from './rich-text.utils';
+} from '../../utils/rich-text.utils';
 
 @Component({
   selector: 'app-rich-text-toolbar',

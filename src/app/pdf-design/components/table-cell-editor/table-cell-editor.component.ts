@@ -9,8 +9,8 @@ import {
   HostListener,
 } from '@angular/core';
 
-import { SafeHtmlPipe } from './safe-html.pipe';
-import { DEFAULT_TABLE_CELL_HTML } from './rich-text.utils';
+import { SafeHtmlPipe } from '../../pipes/safe-html.pipe';
+import { DEFAULT_TABLE_CELL_HTML } from '../../utils/rich-text.utils';
 
 @Component({
   selector: 'td[appTableCell]',

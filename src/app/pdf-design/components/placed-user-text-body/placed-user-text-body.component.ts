@@ -7,7 +7,7 @@ import {
   viewChild,
 } from '@angular/core';
 
-import { SafeHtmlPipe } from './safe-html.pipe';
+import { SafeHtmlPipe } from '../../pipes/safe-html.pipe';
 
 @Component({
   selector: 'app-placed-user-text-body',

@@ -1,6 +1,6 @@
 import { Component, input, output, signal, effect } from '@angular/core';
 
-import { cropDataUrl } from './pdf-design.helpers';
+import { cropDataUrl } from '../../utils/pdf-design.helpers';
 
 @Component({
   selector: 'app-image-crop-modal',

@@ -1,6 +1,6 @@
 import { Routes } from '@angular/router';
-import { PdfDesignExtractorComponent } from './pdf-design/pdf-design-extractor.component';
-import { PdfsComponent } from './pdf-design/pdfs.component';
+import { PdfDesignExtractorComponent } from './pdf-design/pages/pdf-design-extractor/pdf-design-extractor.component';
+import { PdfsComponent } from './pdf-design/pages/pdfs/pdfs.component';
 
 export const routes: Routes = [
   { path: '', pathMatch: 'full', component: PdfsComponent },

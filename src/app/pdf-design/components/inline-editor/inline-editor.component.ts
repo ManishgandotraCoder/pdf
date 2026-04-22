@@ -1,8 +1,8 @@
 import { AfterViewInit, Component, ElementRef, input, output, viewChild } from '@angular/core';
 
-import type { TextElement } from './pdf-design.models';
-import { RichTextToolbarComponent } from './rich-text-toolbar.component';
-import { isProbablyHtml } from './rich-text.utils';
+import type { TextElement } from '../../models/pdf-design.models';
+import { RichTextToolbarComponent } from '../rich-text-toolbar/rich-text-toolbar.component';
+import { isProbablyHtml } from '../../utils/rich-text.utils';
 
 @Component({
   selector: 'app-inline-editor',

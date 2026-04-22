@@ -3,7 +3,7 @@ import { provideRouter } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
 import { App } from './app';
 import { routes } from './app.routes';
-import { PdfDesignExtractorComponent } from './pdf-design/pdf-design-extractor.component';
+import { PdfDesignExtractorComponent } from './pdf-design/pages/pdf-design-extractor/pdf-design-extractor.component';
 
 describe('App', () => {
   beforeEach(async () => {

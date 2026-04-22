@@ -14,15 +14,15 @@ import { toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import { map } from 'rxjs/operators';
-import { ImageCropModalComponent } from './image-crop-modal.component';
-import { RichTextToolbarComponent } from './rich-text-toolbar.component';
-import { InlineEditorComponent } from './inline-editor.component';
-import { LoadingScreenComponent } from './loading-screen.component';
-import { PlacedTableGridComponent } from './placed-table-grid.component';
-import { PlacedUserTextBodyComponent } from './placed-user-text-body.component';
-import { RichTextEditorBlockComponent } from './rich-text-editor-block.component';
-import { SafeHtmlPipe } from './safe-html.pipe';
-import { UploadZoneComponent } from './upload-zone.component';
+import { ImageCropModalComponent } from '../../components/image-crop-modal/image-crop-modal.component';
+import { RichTextToolbarComponent } from '../../components/rich-text-toolbar/rich-text-toolbar.component';
+import { InlineEditorComponent } from '../../components/inline-editor/inline-editor.component';
+import { LoadingScreenComponent } from '../../components/loading-screen/loading-screen.component';
+import { PlacedTableGridComponent } from '../../components/placed-table-grid/placed-table-grid.component';
+import { PlacedUserTextBodyComponent } from '../../components/placed-user-text-body/placed-user-text-body.component';
+import { RichTextEditorBlockComponent } from '../../components/rich-text-editor-block/rich-text-editor-block.component';
+import { SafeHtmlPipe } from '../../pipes/safe-html.pipe';
+import { UploadZoneComponent } from '../../components/upload-zone/upload-zone.component';
 import {
   AddedImagesMap,
   AddedRichTextsMap,
@@ -45,7 +45,7 @@ import {
   TextElement,
   UserTextElement,
   VideoElement,
-} from './pdf-design.models';
+} from '../../models/pdf-design.models';
 import {
   clusterTemplates,
   createBlankPageData,
@@ -62,11 +62,11 @@ import {
   resolvePlacementRectAgainstObstacles,
   remapPageKeyedState,
   remapPageKeyedStateInsert,
-} from './pdf-design.helpers';
-import { extractPage } from './pdf-extract-page';
-import { PROPOSAL_SECTION_CATALOG } from './proposal-sections.catalog';
-import { ensureTableCells, isProbablyHtml } from './rich-text.utils';
-import { PdfsApiService } from './pdfs-api.service';
+} from '../../utils/pdf-design.helpers';
+import { extractPage } from '../../utils/pdf-extract-page';
+import { PROPOSAL_SECTION_CATALOG } from '../../utils/proposal-sections.catalog';
+import { ensureTableCells, isProbablyHtml } from '../../utils/rich-text.utils';
+import { PdfsApiService } from '../../services/pdfs-api.service';
 
 @Component({
   selector: 'app-pdf-design-extractor',

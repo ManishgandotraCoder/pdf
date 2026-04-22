@@ -1,7 +1,7 @@
 import { Component, input, output } from '@angular/core';
 
-import { TableCellEditorComponent } from './table-cell-editor.component';
-import { ensureTableCells } from './rich-text.utils';
+import { TableCellEditorComponent } from '../table-cell-editor/table-cell-editor.component';
+import { ensureTableCells } from '../../utils/rich-text.utils';
 
 @Component({
   selector: 'app-placed-table-grid',

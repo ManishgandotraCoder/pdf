@@ -7,7 +7,7 @@ import type {
   ResizeHandleId,
   TemplateCluster,
   VideoElement,
-} from './pdf-design.models';
+} from '../models/pdf-design.models';
 
 export function toHex(r: number, g: number, b: number): string {
   const c = (v: number) =>
