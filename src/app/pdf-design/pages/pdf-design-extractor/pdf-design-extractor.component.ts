@@ -16,12 +16,9 @@ import { firstValueFrom } from 'rxjs';
 import { map } from 'rxjs/operators';
 import { ImageCropModalComponent } from '../../components/image-crop-modal/image-crop-modal.component';
 import { RichTextToolbarComponent } from '../../components/rich-text-toolbar/rich-text-toolbar.component';
-import { InlineEditorComponent } from '../../components/inline-editor/inline-editor.component';
 import { LoadingScreenComponent } from '../../components/loading-screen/loading-screen.component';
 import { PlacedTableGridComponent } from '../../components/placed-table-grid/placed-table-grid.component';
 import { PlacedUserTextBodyComponent } from '../../components/placed-user-text-body/placed-user-text-body.component';
-import { RichTextEditorBlockComponent } from '../../components/rich-text-editor-block/rich-text-editor-block.component';
-import { SafeHtmlPipe } from '../../pipes/safe-html.pipe';
 import { UploadZoneComponent } from '../../components/upload-zone/upload-zone.component';
 import {
   AddedImagesMap,
@@ -30,7 +27,6 @@ import {
   AddedVideosMap,
   CropModalState,
   DesignTokens,
-  EditsMap,
   HistorySnapshot,
   ImageDragState,
   ImageEditsMap,
@@ -72,14 +68,11 @@ import { PdfsApiService } from '../../services/pdfs-api.service';
   selector: 'app-pdf-design-extractor',
   standalone: true,
   imports: [
-    SafeHtmlPipe,
     UploadZoneComponent,
     LoadingScreenComponent,
     ImageCropModalComponent,
-    InlineEditorComponent,
     PlacedTableGridComponent,
     PlacedUserTextBodyComponent,
-    RichTextEditorBlockComponent,
     RichTextToolbarComponent,
   ],
   templateUrl: './pdf-design-extractor.component.html',
@@ -121,8 +114,6 @@ export class PdfDesignExtractorComponent {
   readonly totalPgs = signal(0);
   readonly selPage = signal(0);
   readonly selEl = signal<SelElement | null>(null);
-  readonly editingId = signal<string | null>(null);
-  readonly edits = signal<EditsMap>({});
   readonly imageEdits = signal<ImageEditsMap>({});
   readonly layoutEdits = signal<LayoutEditsMap>({});
   /** Right panel: structural tools vs saved assets (placeholder for asset pipeline). */
@@ -147,9 +138,6 @@ export class PdfDesignExtractorComponent {
 
   readonly pdfTitle = signal<string>('');
 
-  // Always-visible inspector editor draft (even with no selection).
-  readonly inspectorDraftHtml = signal<string>('');
-
   readonly canvasRef = viewChild<ElementRef<HTMLCanvasElement>>('canvas');
   readonly pageStageRef = viewChild<ElementRef<HTMLDivElement>>('pageStage');
   readonly addImageInputRef = viewChild<ElementRef<HTMLInputElement>>('addImageInput');
@@ -158,7 +146,6 @@ export class PdfDesignExtractorComponent {
   private historyStack: HistorySnapshot[] = [];
   private redoStack: HistorySnapshot[] = [];
   private isRestoring = false;
-  private lastTextHistoryAt = 0;
   private imageDrag: ImageDragState | null = null;
   private suppressImageClick = false;
   private tableUndoGate: { tableId: string | null; armed: boolean } = { tableId: null, armed: false };
@@ -174,15 +161,7 @@ export class PdfDesignExtractorComponent {
     if (this.previewMode()) {
       this.editorMode.set('view');
       this.selEl.set(null);
-      this.editingId.set(null);
     }
-  });
-
-  private readonly inspectorDraftSync = effect(() => {
-    const sel = this.selEl();
-    const pg = this.pg();
-    if (!pg || !sel || sel.type !== 'text') return;
-    this.inspectorDraftHtml.set(this.textEditOrOriginal(sel.id, sel.content));
   });
 
   constructor() {
@@ -413,14 +392,12 @@ export class PdfDesignExtractorComponent {
       this.selPage.set(0);
       this.activeSectionId.set(sec.id);
       this.selEl.set(null);
-      this.editingId.set(null);
       return;
     }
     if (sec.catalogId === 'acceptance') {
       this.selPage.set(last);
       this.activeSectionId.set(sec.id);
       this.selEl.set(null);
-      this.editingId.set(null);
       return;
     }
     const pn = this.sectionStartPageNum(sec);
@@ -428,7 +405,6 @@ export class PdfDesignExtractorComponent {
     this.selPage.set(pageIdx);
     this.activeSectionId.set(sec.id);
     this.selEl.set(null);
-    this.editingId.set(null);
   }
 
   sectionStartPageNum(sec: ProposalSection): number {
@@ -529,7 +505,6 @@ export class PdfDesignExtractorComponent {
 
     this.pages.set(newPages);
     this.templates.set(clusterTemplates(newPages));
-    this.edits.update((prev) => applyMany(prev));
     this.imageEdits.update((prev) => applyMany(prev));
     this.layoutEdits.update((prev) => applyMany(prev));
     this.addedImages.update((prev) => applyMany(prev));
@@ -553,7 +528,6 @@ export class PdfDesignExtractorComponent {
     this.ensureMandatorySections();
 
     this.selEl.set(null);
-    this.editingId.set(null);
     const nextIdx = Math.min(Math.max(0, this.selPage()), Math.max(0, newPages.length - 1));
     this.selPage.set(nextIdx);
     this.setActiveSectionFromPage();
@@ -601,8 +575,6 @@ export class PdfDesignExtractorComponent {
     this.pages.set([]);
     this.selPage.set(0);
     this.selEl.set(null);
-    this.edits.set({});
-    this.editingId.set(null);
     this.imageEdits.set({});
     this.layoutEdits.set({});
     this.addedImages.set({});
@@ -644,7 +616,6 @@ export class PdfDesignExtractorComponent {
   captureBeforeChange(): void {
     if (this.isRestoring) return;
     const snap: HistorySnapshot = {
-      edits: structuredClone(this.edits()),
       imageEdits: structuredClone(this.imageEdits()),
       layoutEdits: structuredClone(this.layoutEdits()),
       addedImages: structuredClone(this.addedImages()),
@@ -661,7 +632,6 @@ export class PdfDesignExtractorComponent {
     if (this.historyStack.length === 0) return;
     this.isRestoring = true;
     const current: HistorySnapshot = {
-      edits: structuredClone(this.edits()),
       imageEdits: structuredClone(this.imageEdits()),
       layoutEdits: structuredClone(this.layoutEdits()),
       addedImages: structuredClone(this.addedImages()),
@@ -671,7 +641,6 @@ export class PdfDesignExtractorComponent {
     };
     this.redoStack.push(current);
     const prev = this.historyStack.pop()!;
-    this.edits.set(prev.edits);
     this.imageEdits.set(prev.imageEdits);
     this.layoutEdits.set(prev.layoutEdits ?? {});
     this.addedImages.set(prev.addedImages);
@@ -679,7 +648,6 @@ export class PdfDesignExtractorComponent {
     this.addedTables.set(prev.addedTables || {});
     this.addedRichTexts.set(prev.addedRichTexts || {});
     this.selEl.set(null);
-    this.editingId.set(null);
     this.historyUi.update((u) => u + 1);
     queueMicrotask(() => {
       this.isRestoring = false;
@@ -690,7 +658,6 @@ export class PdfDesignExtractorComponent {
     if (this.redoStack.length === 0) return;
     this.isRestoring = true;
     const current: HistorySnapshot = {
-      edits: structuredClone(this.edits()),
       imageEdits: structuredClone(this.imageEdits()),
       layoutEdits: structuredClone(this.layoutEdits()),
       addedImages: structuredClone(this.addedImages()),
@@ -700,7 +667,6 @@ export class PdfDesignExtractorComponent {
     };
     this.historyStack.push(current);
     const next = this.redoStack.pop()!;
-    this.edits.set(next.edits);
     this.imageEdits.set(next.imageEdits);
     this.layoutEdits.set(next.layoutEdits ?? {});
     this.addedImages.set(next.addedImages);
@@ -708,43 +674,14 @@ export class PdfDesignExtractorComponent {
     this.addedTables.set(next.addedTables || {});
     this.addedRichTexts.set(next.addedRichTexts || {});
     this.selEl.set(null);
-    this.editingId.set(null);
     this.historyUi.update((u) => u + 1);
     queueMicrotask(() => {
       this.isRestoring = false;
     });
   }
 
-  setEdit(pageNum: number, elId: string, val: string, historyMode: 'debounced' | 'commit' | 'skip' = 'debounced'): void {
-    if (historyMode !== 'skip') {
-      const now = Date.now();
-      const shouldSnap = historyMode === 'commit' || now - this.lastTextHistoryAt > 650;
-      if (shouldSnap) {
-        this.captureBeforeChange();
-        this.lastTextHistoryAt = now;
-      }
-    }
-    this.edits.update((prev) => ({
-      ...prev,
-      [pageNum]: { ...(prev[pageNum] || {}), [elId]: val },
-    }));
-  }
-
-  clearEdit(pageNum: number, elId: string): void {
-    this.captureBeforeChange();
-    this.edits.update((prev) => {
-      const pgEdits = { ...(prev[pageNum] || {}) };
-      delete pgEdits[elId];
-      return { ...prev, [pageNum]: pgEdits };
-    });
-  }
-
-  pageHasEdits(pn: number): boolean {
-    return Object.keys(this.edits()[pn] || {}).length > 0;
-  }
-
   totalEdits(): number {
-    return Object.values(this.edits()).reduce((s, pg) => s + Object.keys(pg).length, 0);
+    return 0;
   }
 
   pageHasImageMods(pn: number): boolean {
@@ -791,7 +728,6 @@ export class PdfDesignExtractorComponent {
     const newPages = pages.filter((_, i) => i !== delIdx).map((p, i) => ({ ...p, pageNum: i + 1 }));
     this.pages.set(newPages);
     this.templates.set(clusterTemplates(newPages));
-    this.edits.update((prev) => remapPageKeyedState(prev, delPn));
     this.imageEdits.update((prev) => remapPageKeyedState(prev, delPn));
     this.layoutEdits.update((prev) => remapPageKeyedState(prev, delPn));
     this.addedImages.update((prev) => remapPageKeyedState(prev, delPn));
@@ -799,7 +735,6 @@ export class PdfDesignExtractorComponent {
     this.addedTables.update((prev) => remapPageKeyedState(prev, delPn));
     this.addedRichTexts.update((prev) => remapPageKeyedState(prev, delPn));
     this.selEl.set(null);
-    this.editingId.set(null);
     this.selPage.update((prev) => {
       if (delIdx < prev) return prev - 1;
       if (delIdx === prev) return Math.min(delIdx, n - 2);
@@ -823,7 +758,6 @@ export class PdfDesignExtractorComponent {
     }));
     this.pages.set(newPages);
     this.templates.set(clusterTemplates(newPages));
-    this.edits.update((prev) => remapPageKeyedStateInsert(prev, insert1Based));
     this.imageEdits.update((prev) => remapPageKeyedStateInsert(prev, insert1Based));
     this.layoutEdits.update((prev) => remapPageKeyedStateInsert(prev, insert1Based));
     this.addedImages.update((prev) => remapPageKeyedStateInsert(prev, insert1Based));
@@ -831,7 +765,6 @@ export class PdfDesignExtractorComponent {
     this.addedTables.update((prev) => remapPageKeyedStateInsert(prev, insert1Based));
     this.addedRichTexts.update((prev) => remapPageKeyedStateInsert(prev, insert1Based));
     this.selEl.set(null);
-    this.editingId.set(null);
     this.selPage.set(insertIdx);
   }
 
@@ -916,7 +849,6 @@ export class PdfDesignExtractorComponent {
       if (!payload || typeof payload !== 'object') return;
       const s = payload as Partial<{
         tokens: DesignTokens;
-        edits: EditsMap;
         imageEdits: ImageEditsMap;
         layoutEdits: LayoutEditsMap;
         addedImages: AddedImagesMap;
@@ -932,7 +864,6 @@ export class PdfDesignExtractorComponent {
 
       if (s.tokens) this.tokens.set(s.tokens);
       if (Array.isArray(s.proposalSections)) this.proposalSections.set(this.normalizeSections(s.proposalSections));
-      if (s.edits) this.edits.set(s.edits);
       if (s.imageEdits) this.imageEdits.set(s.imageEdits);
       if (s.layoutEdits) this.layoutEdits.set(s.layoutEdits);
       if (s.addedImages) this.addedImages.set(s.addedImages);
@@ -964,7 +895,6 @@ export class PdfDesignExtractorComponent {
   private currentPdfEditorState(): unknown {
     return {
       tokens: structuredClone(this.tokens()),
-      edits: structuredClone(this.edits()),
       imageEdits: structuredClone(this.imageEdits()),
       layoutEdits: structuredClone(this.layoutEdits()),
       addedImages: structuredClone(this.addedImages()),
@@ -985,7 +915,7 @@ export class PdfDesignExtractorComponent {
       return;
     }
     await firstValueFrom(this.pdfsApi.putPdfState(this.openedPdfId, this.currentPdfEditorState()));
-    alert('Saved. Re-opening this PDF will show your edits.');
+    alert('Saved.');
   }
 
   patchImageEdit(
@@ -1302,7 +1232,6 @@ export class PdfDesignExtractorComponent {
 
   showOverlayResizeHandles(el: SelElement): boolean {
     if (this.editorMode() !== 'edit') return false;
-    if (el.type === 'text' && this.editingId() === el.id) return false;
     return el.type === 'image' || el.type === 'video' || el.type === 'text';
   }
 
@@ -1799,7 +1728,6 @@ export class PdfDesignExtractorComponent {
     this.pages.set([]);
     this.templates.set([]);
     this.tokens.set({ colors: [], fonts: [], sizes: [] });
-    this.edits.set({});
     this.imageEdits.set({});
     this.layoutEdits.set({});
     this.addedImages.set({});
@@ -1817,7 +1745,6 @@ export class PdfDesignExtractorComponent {
     const pg = this.pg();
     if (!pg) return [];
     return [
-      ...pg.textElements,
       ...pg.shapes,
       ...pg.images,
       ...(this.addedImages()[pg.pageNum] || []),
@@ -1828,25 +1755,6 @@ export class PdfDesignExtractorComponent {
   /** View mode: same bounds as `overlayEls()` but omit videos — a transparent hit-layer would block the play control. */
   overlayElsForViewTooltips(): SelElement[] {
     return this.overlayEls().filter((e) => e.type !== 'video');
-  }
-
-  editedTexts(): TextElement[] {
-    const pg = this.pg();
-    if (!pg) return [];
-    const pageEdits = this.edits()[pg.pageNum] || {};
-    return pg.textElements.filter((e) => pageEdits[e.id] !== undefined);
-  }
-
-  pageEdits(): Record<string, string> {
-    const pg = this.pg();
-    if (!pg) return {};
-    return this.edits()[pg.pageNum] || {};
-  }
-
-  /** Edited HTML/string when present in `pageEdits()`, otherwise the extracted PDF text. */
-  textEditOrOriginal(elId: string, original: string): string {
-    const m = this.pageEdits();
-    return Object.prototype.hasOwnProperty.call(m, elId) ? m[elId] : original;
   }
 
   userTextForInspector(): UserTextElement | null {
@@ -1894,30 +1802,22 @@ export class PdfDesignExtractorComponent {
   }
 
   onStageClick(): void {
-    if (!this.editingId()) {
-      this.selEl.set(null);
-      this.tableUndoGate = { tableId: null, armed: false };
-      this.placedTextUndoGate = null;
-    }
-  }
-
-  clearAllEdits(): void {
-    this.captureBeforeChange();
-    this.edits.set({});
+    this.selEl.set(null);
+    this.tableUndoGate = { tableId: null, armed: false };
+    this.placedTextUndoGate = null;
   }
 
   /** Clears text edits, layout overrides, image edits, and user-placed content on all pages. */
   clearAllCanvasEdits(): void {
     if (
       !confirm(
-        'Clear all edits on every page? This removes text changes, layout moves, image replacements, and placed images, videos, tables, and text blocks. Undo is available.',
+        'Clear all edits on every page? This removes layout moves, image replacements, and placed images, videos, tables, and text blocks. Undo is available.',
       )
     ) {
       return;
     }
     this.revokeVideoBlobs(this.addedVideos());
     this.captureBeforeChange();
-    this.edits.set({});
     this.imageEdits.set({});
     this.layoutEdits.set({});
     this.addedImages.set({});
@@ -1925,7 +1825,6 @@ export class PdfDesignExtractorComponent {
     this.addedTables.set({});
     this.addedRichTexts.set({});
     this.selEl.set(null);
-    this.editingId.set(null);
     this.historyUi.update((u) => u + 1);
   }
 
@@ -1969,7 +1868,6 @@ export class PdfDesignExtractorComponent {
     if (readOnly) return;
     e.stopPropagation();
     this.selEl.set(t);
-    this.editingId.set(null);
   }
 
   onPlacedRichTextMousedown(e: MouseEvent, readOnly: boolean): void {
@@ -1981,37 +1879,6 @@ export class PdfDesignExtractorComponent {
     if (readOnly) return;
     e.stopPropagation();
     this.selEl.set(rt);
-    this.editingId.set(null);
-  }
-
-  onOverlayPdfTextRemove(e: Event, el: SelElement): void {
-    e.stopPropagation();
-    e.preventDefault();
-    this.removePdfTextFromPage(el);
-  }
-
-  /**
-   * PDF page text is painted on the canvas; we can't delete pixels. Saving an empty edit activates
-   * the same "edited text" overlay used for revisions so it covers the original run (like painting over it).
-   */
-  removePdfTextFromPage(el: SelElement): void {
-    if (el.type !== 'text') return;
-    const pg = this.pg();
-    if (!pg) return;
-    this.setEdit(pg.pageNum, el.id, '', 'commit');
-    this.selEl.set(null);
-    this.editingId.set(null);
-  }
-
-  editingTextEl(): TextElement | null {
-    const id = this.editingId();
-    const pg = this.pg();
-    if (!id || !pg) return null;
-    const raw = pg.textElements.find((e) => e.id === id);
-    if (!raw) return null;
-    const le = this.layoutEdits()[pg.pageNum]?.[id];
-    if (!le) return raw;
-    return { ...raw, ...le };
   }
 
   applyCropResult(url: string): void {
@@ -2105,7 +1972,6 @@ export class PdfDesignExtractorComponent {
 
   onOverlayClick(e: MouseEvent, el: SelElement, placementDrag: boolean, active: boolean): void {
     e.stopPropagation();
-    if (this.editingId()) return;
     if (placementDrag && this.suppressImageClick) {
       this.suppressImageClick = false;
       return;
@@ -2113,17 +1979,8 @@ export class PdfDesignExtractorComponent {
     this.selEl.set(active ? null : el);
   }
 
-  onOverlayDblClick(e: MouseEvent, el: SelElement): void {
-    e.stopPropagation();
-    if (this.editorMode() !== 'edit') return;
-    if (el.type === 'text') {
-      this.selEl.set(el);
-      this.editingId.set(el.id);
-    }
-  }
-
   onOverlayEnter(e: MouseEvent, active: boolean, bgTint: string): void {
-    if (active || this.editingId()) return;
+    if (active) return;
     (e.currentTarget as HTMLElement).style.background = bgTint;
   }
 
@@ -2168,18 +2025,6 @@ export class PdfDesignExtractorComponent {
 
   clickAddVideo(): void {
     this.addVideoInputRef()?.nativeElement?.click();
-  }
-
-  onInspectorTextHtml(html: string, pageNum: number, id: string): void {
-    if (this.editorMode() !== 'edit') this.editorMode.set('edit');
-    this.setEdit(pageNum, id, html);
-  }
-
-  onInspectorDraftHtml(html: string, pageNum: number): void {
-    this.inspectorDraftHtml.set(html);
-    const sel = this.selEl();
-    if (!sel || sel.type !== 'text') return;
-    this.onInspectorTextHtml(html, pageNum, sel.id);
   }
 
   clampNum(e: Event, min: number, max: number): number {
@@ -2268,39 +2113,6 @@ export class PdfDesignExtractorComponent {
     e.preventDefault();
     if (sel.type === 'video') this.removeVideoInspector(sel);
     else if (sel.type === 'image') this.removeImageInspector(sel);
-  }
-
-  editSummaryEntries(): {
-    key: string;
-    pn: string;
-    was: string;
-    now: string;
-    pgData: PageData | undefined;
-    elId: string;
-  }[] {
-    const out: {
-      key: string;
-      pn: string;
-      was: string;
-      now: string;
-      pgData: PageData | undefined;
-      elId: string;
-    }[] = [];
-    for (const [pn, pEdits] of Object.entries(this.edits())) {
-      for (const [elId, newText] of Object.entries(pEdits)) {
-        const pgData = this.pages().find((p) => p.pageNum === +pn);
-        const origEl = pgData?.textElements.find((e) => e.id === elId);
-        out.push({
-          key: `${pn}-${elId}`,
-          pn,
-          was: origEl?.content?.slice(0, 30) || '…',
-          now: newText.slice(0, 30),
-          pgData,
-          elId,
-        });
-      }
-    }
-    return out;
   }
 
   openAddSectionModal(): void {

@@ -157,7 +157,7 @@
         Pages
       </div>
       @for (p of pages(); track p.pageNum; let idx = $index) {
-      <div (click)="selPage.set(idx); selEl.set(null); editingId.set(null); setActiveSectionFromPage()" style="
+      <div (click)="selPage.set(idx); selEl.set(null); setActiveSectionFromPage()" style="
               margin-bottom: 8px;
               cursor: pointer;
               border-radius: 6px;
@@ -204,7 +204,7 @@
               ">
           {{ p.pageNum }}
         </div>
-        @if (pageHasEdits(p.pageNum) || pageHasImageMods(p.pageNum)) {
+        @if (pageHasImageMods(p.pageNum)) {
         <div style="
                   position: absolute;
                   top: 4px;
@@ -359,14 +359,6 @@
       }
     </div>
 
-    <!-- Inline text editor block (always visible) -->
-    <div
-      style="padding: 0.65rem 1.1rem; background: var(--surface-elevated); border-bottom: 1px solid var(--border-hairline)">
-      <app-rich-text-editor-block [html]="inspectorDraftHtml()" (htmlChange)="onInspectorDraftHtml($event, pgv.pageNum)"
-        [disabled]="editorMode() === 'view'" [fontChoices]="tokens().fonts" [minHeight]="96" />
-    </div>
-
-
     <div class="canvas-scroll" [class.canvas-scroll--drop]="viewerImageDropActive()" (click)="onStageClick()"
       (dragover)="handleViewerDragOver($event)" (dragenter)="handleViewerDragEnter($event)"
       (dragleave)="handleViewerDragLeave($event)" (drop)="handleViewerDrop($event)">
@@ -420,30 +412,6 @@
         </div>
         }
 
-        @for (el of editedTexts(); track el.id) {
-        @if (editorMode() === 'edit' && pageEdits()[el.id] !== undefined && editingId() !== el.id) {
-        @let eb = overlayBounds(el);
-        <div class="edited-overlay" style="position: absolute; padding: 1px 2px; z-index: 0;" [style.left.px]="eb.x - 2"
-          [style.top.px]="eb.y - 1" [style.width.px]="eb.w + 12" [style.minHeight.px]="eb.h + 4"
-          [style.background]="pgv.bgColor || '#ffffff'" [style.color]="el.style.color || 'inherit'"
-          [style.fontSize.px]="el.style.fontSizePx || eb.h * 0.72" [style.fontFamily]="el.style.fontFamily"
-          [style.fontWeight]="el.style.fontWeight" [style.fontStyle]="el.style.fontStyle">
-          @if (isProbablyHtml(pageEdits()[el.id])) {
-          <span [innerHTML]="pageEdits()[el.id] | safeHtml"></span>
-          } @else {
-          {{ pageEdits()[el.id] }}
-          }
-        </div>
-        }
-        }
-
-        @if (editingTextEl(); as tel) {
-        <app-inline-editor [el]="tel" [pageW]="pgv.width" [pageH]="pgv.height" [bgColor]="pgv.bgColor"
-          [initialValue]="textEditOrOriginal(tel.id, tel.content)" [fontChoices]="tokens().fonts"
-          (save)="setEdit(pgv.pageNum, tel.id, $event, 'commit'); editingId.set(null)" (cancel)="editingId.set(null)"
-          (resetEdits)="removePdfTextFromPage(tel)" />
-        }
-
         @if (editorMode() === 'edit') {
         <div style="position: absolute; top: 0; left: 0; pointer-events: none; z-index: 1" [style.width.px]="pgv.width"
           [style.height.px]="pgv.height">
@@ -466,7 +434,6 @@
           : 'rgba(139,92,246,0.1)';
           @let ob = overlayBounds(el);
           @let active = selEl()?.id === el.id;
-          @let hasEdit = el.type === 'text' && pageEdits()[el.id] !== undefined;
           @let imgEdited =
           el.type === 'image' &&
           !el._userAdded &&
@@ -492,13 +459,13 @@
             [style.top.px]="ob.y" [style.width.px]="max2(ob.w)" [style.height.px]="max2(ob.h)" [style.z-index]="10 + oi"
             [attr.title]="overlayElementTitle(el)" [style.border]="'1px solid ' + (active ? bord : bord + '66')"
             [style.background]="active ? bgTint : 'transparent'" [style.outline]="
-                    hasEdit || imgEdited || imgUser
+                    imgEdited || imgUser
                       ? '1.5px solid #f59e0b'
                       : vidUser
                         ? '1.5px solid #6366f1'
                         : 'none'
                   " (click)="onOverlayClick($event, el, placementDrag, active)"
-            (dblclick)="onOverlayDblClick($event, el)" (pointerdown)="onPlacementPointerDown($event, el, placementDrag)"
+            (pointerdown)="onPlacementPointerDown($event, el, placementDrag)"
             (pointermove)="onPointerMoveMaybe($event, placementDrag)"
             (pointerup)="onPointerUpMaybe($event, placementDrag)"
             (pointercancel)="onPointerUpMaybe($event, placementDrag)"
@@ -538,32 +505,6 @@
               (pointermove)="onImagePointerMove($event)" (pointerup)="onImagePointerUp($event)"
               (pointercancel)="onImagePointerUp($event)"></div>
             }
-            }
-            @if (active && el.type === 'text') {
-            <button type="button" title="Remove text from page" aria-label="Remove text from page"
-              (pointerdown)="$event.stopPropagation()" (click)="onOverlayPdfTextRemove($event, el)" style="
-                        position: absolute;
-                        top: 2px;
-                        right: 2px;
-                        z-index: 25;
-                        width: 28px;
-                        height: 28px;
-                        padding: 0;
-                        display: flex;
-                        align-items: center;
-                        justify-content: center;
-                        border-radius: 6px;
-                        border: 1px solid rgba(0, 0, 0, 0.1);
-                        background: rgba(255, 255, 255, 0.95);
-                        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
-                        color: #64748b;
-                        cursor: pointer;
-                      ">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                stroke-linecap="round" aria-hidden="true">
-                <path d="M18 6L6 18M6 6l12 12" />
-              </svg>
-            </button>
             }
             @if (active && (el.type === 'image' || el.type === 'video')) {
             <button type="button" title="Remove" aria-label="Remove" (pointerdown)="$event.stopPropagation()"
@@ -847,7 +788,7 @@
         <!-- VIEW -->
         <div class="tooltip-wrapper">
           <button type="button" title="View — read without selection outlines"
-            (click)="editorMode.set('view'); editingId.set(null); selEl.set(null)" class="inspector-icon-btn"
+            (click)="editorMode.set('view'); selEl.set(null)" class="inspector-icon-btn"
             style="width:40px; height:40px; display:flex; align-items:center; justify-content:center; border-radius:8px; transition:all 0.2s cubic-bezier(0.4,0,0.2,1); background:#fff; box-shadow:0 1px 2px rgba(0,0,0,0.08)"
             [style.border]="'1px solid ' + (editorMode() === 'view' ? '#1976d2' : 'rgba(0,0,0,0.12)')"
             [style.color]="editorMode() === 'view' ? '#1976d2' : '#4338ca'" [style.cursor]="'pointer'">
@@ -1021,7 +962,6 @@
     <div>
       <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 16px">
         @if (
-        (pageEdits()[sel.id] !== undefined && sel.type === 'text') ||
         (sel.type === 'image' &&
         (imageEdits()[pgv.pageNum]?.[sel.id]?.src || imageEdits()[pgv.pageNum]?.[sel.id]?.removed))
         ) {
@@ -1052,70 +992,8 @@
                   padding-bottom: 5px;
                   border-bottom: 1px solid #e8ecf0;
                 ">
-          Edit Text
+          Text
         </div>
-        <!-- moved to below-topbar block -->
-        <div style="display: flex; gap: 6px; margin-top: 8px">
-          <button type="button" (click)="setEdit(pgv.pageNum, sel.id, sel.content, 'commit')" style="
-                    flex: 1;
-                    padding: 5px 0;
-                    background: #e8ecf0;
-                    color: #888;
-                    border: 1px solid #d1d9e0;
-                    border-radius: 5px;
-                    font-size: 10px;
-                    cursor: pointer;
-                  ">
-            Reset
-          </button>
-          <button type="button" (click)="editorMode.set('edit'); editingId.set(sel.id)" style="
-                    flex: 1;
-                    padding: 5px 0;
-                    background: rgba(42, 172, 184, 0.15);
-                    color: #2aacb8;
-                    border: 1px solid rgba(42, 172, 184, 0.3);
-                    border-radius: 5px;
-                    font-size: 10px;
-                    cursor: pointer;
-                  ">
-            Edit on Page
-          </button>
-        </div>
-        @if (editorMode() === 'edit') {
-        <button type="button" (click)="removePdfTextFromPage(sel)" style="
-                    width: 100%;
-                    margin-top: 8px;
-                    padding: 8px 10px;
-                    background: #fef2f2;
-                    color: #b91c1c;
-                    border: 1px solid #fecaca;
-                    border-radius: 6px;
-                    font-size: 11px;
-                    cursor: pointer;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    gap: 8px;
-                  ">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-            stroke-linecap="round" aria-hidden="true">
-            <path d="M18 6L6 18M6 6l12 12" />
-          </svg>
-          Remove from page
-        </button>
-        }
-        @if (pageEdits()[sel.id] !== undefined && pageEdits()[sel.id] !== sel.content) {
-        <div style="
-                    margin-top: 8px;
-                    padding: 6px 8px;
-                    background: rgba(245, 158, 11, 0.08);
-                    border-radius: 5px;
-                    border: 1px solid rgba(245, 158, 11, 0.2);
-                  ">
-          <div style="font-size: 9px; color: #f59e0b; margin-bottom: 4px">ORIGINAL TEXT</div>
-          <div style="font-size: 11px; color: #666; word-break: break-word">{{ sel.content }}</div>
-        </div>
-        }
       </div>
       }
 
@@ -1379,54 +1257,6 @@
       }
       }
     </div>
-    } @else {
-    @if (totalEdits() > 0) {
-    <div style="margin-bottom: 18px">
-      <div style="
-                font-size: 9px;
-                color: #64748b;
-                letter-spacing: 1.5px;
-                text-transform: uppercase;
-                font-weight: 700;
-                margin-bottom: 8px;
-                padding-bottom: 5px;
-                border-bottom: 1px solid #e8ecf0;
-              ">
-        Edits · {{ totalEdits() }}
-      </div>
-      @for (e of editSummaryEntries(); track e.key) {
-      <div (click)="goToEditSummary(e)" style="
-                  padding: 7px 8px;
-                  background: #f4f6fa;
-                  border-radius: 5px;
-                  margin-bottom: 5px;
-                  border: 1px solid #d1d9e0;
-                  cursor: pointer;
-                ">
-        <div style="font-size: 9px; color: #64748b; margin-bottom: 3px">Page {{ e.pn }}</div>
-        <div style="font-size: 10px; color: #888; margin-bottom: 2px">
-          Was: <span style="color: #555">{{ e.was }}</span>
-        </div>
-        <div style="font-size: 10px; color: #2aacb8">
-          Now: <span style="color: #334155">{{ e.now }}</span>
-        </div>
-      </div>
-      }
-      <button type="button" (click)="clearAllEdits()" style="
-                width: 100%;
-                margin-top: 4px;
-                padding: 5px 0;
-                background: transparent;
-                color: #555;
-                border: 1px solid #d1d9e0;
-                border-radius: 5px;
-                font-size: 10px;
-                cursor: pointer;
-              ">
-        Clear All Edits
-      </button>
-    </div>
-    }
     }
   </div>
 </div>

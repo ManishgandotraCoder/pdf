@@ -102,7 +102,6 @@ export interface TemplateCluster {
   pageNums: number[];
 }
 
-export type EditsMap = Record<number, Record<string, string>>;
 export type ImageEditsMap = Record<
   number,
   Record<string, { removed?: boolean; src?: string; x?: number; y?: number; w?: number; h?: number }>
@@ -152,7 +151,6 @@ export interface ProposalSection {
 }
 
 export interface HistorySnapshot {
-  edits: EditsMap;
   imageEdits: ImageEditsMap;
   layoutEdits: LayoutEditsMap;
   addedImages: AddedImagesMap;
