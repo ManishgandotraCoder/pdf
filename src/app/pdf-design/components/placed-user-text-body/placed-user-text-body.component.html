@@ -3,7 +3,9 @@
     style="
       height: 100%;
       overflow: auto;
-      width:100vw"
+      display: inline-block;
+      max-width: 100%;
+      text-align: inherit;"
     [innerHTML]="(html() || '<p><br></p>') | safeHtml"
   ></div>
 } @else {
@@ -11,19 +13,27 @@
     #editable
     contenteditable="true"
     (pointerdown)="onPointerDown($event)"
+    (focus)="onFocus(); focusFirstEdit.emit()"
+    (mouseup)="onMouseUp()"
+    (keyup)="onKeyUp()"
+    (blur)="onBlur()"
     (pointermove)="pointerMove.emit($event)"
     (pointerup)="pointerUp.emit($event)"
     (pointercancel)="pointerCancel.emit($event)"
     (input)="onInput($event)"
-    (focus)="focusFirstEdit.emit()"
     style="
       height: 100%;
       overflow: auto;
-      width:100vw;
+      display: inline-block;
+      max-width: 100%;
       outline: none;
-      font-size: 14px;
-      line-height: 1.5;
-      color: #0f172a;
+      font-family: inherit;
+      font-size: inherit;
+      font-weight: inherit;
+      font-style: inherit;
+      line-height: inherit;
+      color: inherit;
+      text-align: inherit;
       word-break: break-word;
       touch-action: manipulation;
       cursor: text;

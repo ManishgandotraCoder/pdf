@@ -613,6 +613,12 @@
         @let readOnly = editorMode() !== 'edit';
         @let isPdfText = rt.id.startsWith('pdftext_');
         @let sty = isPdfText ? pdfTextStyle(rt) : null;
+        @let showChrome = selected && !readOnly && (!!userTextHasSelection()[rt.id] || !!userTextHasFocus()[rt.id]);
+        @let sideSlotPx = 0;
+        @let showLeftDrag = !readOnly;
+        @let showRightClose = !readOnly;
+        @let leftColPx = showLeftDrag ? sideSlotPx : 0;
+        @let rightColPx = showRightClose ? sideSlotPx : 0;
         <div style="
                 position: absolute;
                 z-index: 2;
@@ -629,41 +635,113 @@
           (mousedown)="onPlacedRichTextMousedown($event, readOnly)" (pointermove)="onImagePointerMove($event)"
           (pointerup)="onImagePointerUp($event)" (pointercancel)="onImagePointerUp($event)"
           (click)="onPlacedRichTextClick($event, rt, readOnly)">
-          @if (!readOnly) {
-            <div role="presentation" (pointerdown)="$event.stopPropagation(); onImagePointerDown($event, rt)"
-            (pointermove)="onImagePointerMove($event)" (pointerup)="onImagePointerUp($event)"
-            (pointercancel)="onImagePointerUp($event)" style="
-                    flex: 1;
-                    min-width: 0;
-                    height: 100%;
-                    display: flex;
-                    align-items: center;
-                    gap: 6px;
-                  " [style.cursor]="draggingImageId() === rt.id ? 'grabbing' : 'grab'"
-            title="Text block — Drag to move · or hold Alt (⌥) and drag inside the text">
-            <span aria-hidden
-              style="letter-spacing: -2px; opacity: 0.7; font-weight: bolder; font-size: 14px;">⋮⋮</span>
-          </div>
-          }
-          @if (selected && !readOnly) {
-          <button type="button" title="Remove text block" aria-label="Remove text block"
-            (pointerdown)="$event.stopPropagation()" (click)="$event.stopPropagation(); removeUserTextInspector(rt)"
-                  >
-           x
-          </button>
-          }
-          <div style="flex: 1; min-height: 0; overflow: hidden"
-            [style.font-family]="sty?.fontFamily || null"
-            [style.font-size.px]="sty?.fontSizePx || null"
-            [style.font-weight]="sty?.fontWeight || null"
-            [style.font-style]="sty?.fontStyle || null"
-            [style.color]="sty?.color || null"
+          <div
+            style="display: flex; align-items: flex-start; width: 100%; flex: 1; min-height: 0; box-sizing: border-box">
+            @if (showLeftDrag) {
+            <div
+              role="presentation"
+              (pointerdown)="onUserTextDragHandlePointerDown($event, rt, showChrome)"
+              (pointermove)="onUserTextDragHandlePointerMove($event, showChrome)"
+              (pointerup)="onUserTextDragHandlePointerUp($event, showChrome)"
+              (pointercancel)="onUserTextDragHandlePointerUp($event, showChrome)"
+              style="
+                flex-shrink: 0;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                padding-top: 4px;
+                box-sizing: border-box;
+                pointer-events: auto;
+                opacity: 1;
+                color: #2aacb8;
+              "
+              [style.width.px]="leftColPx"
+              [style.min-width.px]="leftColPx"
+              [style.cursor]="draggingImageId() === rt.id ? 'grabbing' : 'grab'"
+              title="Drag to move · or hold Alt (⌥) and drag inside the text"
             >
-            <app-placed-user-text-body [html]="rt.html" [readOnly]="readOnly"
-              (htmlChange)="updateUserTextHtml(rt.id, $event)" (focusFirstEdit)="onPlacedUserTextFocus(rt.id)"
-              (pointerMove)="onImagePointerMove($event)" (pointerUp)="onImagePointerUp($event)"
-              (pointerCancel)="onImagePointerUp($event)" (altDragPointerDown)="onAltDragUserText($event, rt)" />
+              <span aria-hidden="true" style="letter-spacing: -2px; font-weight: 700; font-size: 14px; line-height: 1">⋮⋮</span>
+            </div>
+            
+            }
+           
+            <div
+              style="flex: 1; min-height: 0; min-width: 0; overflow: hidden; display: flex; flex-direction: column; text-align: left; box-sizing: border-box; padding: 0 2px"
+              [style.font-family]="sty?.fontFamily || null"
+              [style.font-size.px]="sty?.fontSizePx || null"
+              [style.font-weight]="sty?.fontWeight || null"
+              [style.font-style]="sty?.fontStyle || null"
+              [style.color]="sty?.color || null"
+            >
+              <div style="flex: 1; min-width: 0; display: flex; justify-content: flex-start">
+                <app-placed-user-text-body
+                  [html]="rt.html"
+                  [readOnly]="readOnly"
+                  (htmlChange)="updateUserTextHtml(rt.id, $event)"
+                  (focusFirstEdit)="onPlacedUserTextFocus(rt.id)"
+                  (selectionStateChange)="setUserTextSelection(rt.id, $event)"
+                  (focusStateChange)="setUserTextFocus(rt.id, $event)"
+                  (pointerMove)="onImagePointerMove($event)"
+                  (pointerUp)="onImagePointerUp($event)"
+                  (pointerCancel)="onImagePointerUp($event)"
+                  (altDragPointerDown)="onAltDragUserText($event, rt)"
+                />
+              </div>
+            </div>
+
+            @if (showRightClose) {
+            <div
+              style="
+                flex-shrink: 0;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                padding-top: 4px;
+                box-sizing: border-box;
+                pointer-events: auto;
+                color: #2aacb8;
+              "
+              [style.width.px]="rightColPx"
+              [style.min-width.px]="rightColPx"
+            >
+              <button
+                type="button"
+                title="Remove"
+                aria-label="Remove"
+                (pointerdown)="$event.stopPropagation()"
+                (click)="$event.stopPropagation(); removeUserTextInspector(rt)"
+                style="
+                  display: flex;
+                  align-items: center;
+                  justify-content: center;
+                  width: 32px;
+                  height: 32px;
+                  margin: 0;
+                  padding: 0;
+                  border: none;
+                  border-radius: 8px;
+                  background: transparent;
+                  color: #2aacb8;
+                  cursor: pointer;
+                "
+              >
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  aria-hidden="true"
+                >
+                  <path d="M18 6L6 18M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            }
           </div>
+
           @if (selected && !readOnly) {
           @for (rh of resizeHandleList; track rh.id) {
           <div [style]="resizeHandleBoxStyle(rh)" (pointerdown)="onResizeHandlePointerDown($event, rt, rh.id)"

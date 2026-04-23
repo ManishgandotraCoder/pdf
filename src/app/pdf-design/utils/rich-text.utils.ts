@@ -164,6 +164,35 @@ export function execRich(cmd: string, val?: string): boolean {
   }
 }
 
+export function inferExplicitRichFontWeight(label: string): 'bold' | 'normal' | null {
+  const s = String(label || '').toLowerCase();
+  if (!s.trim()) return null;
+  if (/(extra\s*bold|ultra\s*bold|semi\s*bold|demi\s*bold|bold|black|heavy)/i.test(s)) return 'bold';
+  if (/(extra\s*light|ultra\s*light|thin|hairline|light|regular|normal|book)/i.test(s)) return 'normal';
+  return null;
+}
+
+export function inferExplicitRichFontStyle(label: string): 'italic' | 'normal' | null {
+  const s = String(label || '').toLowerCase();
+  if (!s.trim()) return null;
+  if (/(italic|oblique)/i.test(s)) return 'italic';
+  if (/(roman|regular|normal)/i.test(s)) return 'normal';
+  return null;
+}
+
+export function setRichCommandState(cmd: 'bold' | 'italic' | 'underline', desired: boolean): void {
+  try {
+    const doc = document as Document & {
+      queryCommandState(commandId: string): boolean;
+    };
+    const cur = !!doc.queryCommandState(cmd);
+    if (cur === desired) return;
+    execRich(cmd);
+  } catch {
+    // If queryCommandState is not supported, avoid toggling blindly.
+  }
+}
+
 const LIST_BLOCK_TAGS = new Set([
   'P',
   'DIV',

@@ -7,10 +7,13 @@ import {
   execRichList,
   expandToAllIfCollapsed,
   getRichTextSelectionFontInfo,
+  inferExplicitRichFontStyle,
+  inferExplicitRichFontWeight,
   mergeFontOptions,
   promptLinkUrl,
   restoreRichTextSelection,
   saveRichTextSelection,
+  setRichCommandState,
 } from '../../utils/rich-text.utils';
 
 @Component({
@@ -164,6 +167,10 @@ export class RichTextToolbarComponent {
     restoreRichTextSelection();
     expandToAllIfCollapsed();
     execRich('fontName', v);
+    const explicitWeight = inferExplicitRichFontWeight(v);
+    if (explicitWeight) setRichCommandState('bold', explicitWeight === 'bold');
+    const explicitStyle = inferExplicitRichFontStyle(v);
+    if (explicitStyle) setRichCommandState('italic', explicitStyle === 'italic');
     saveRichTextSelection();
     this.syncFromSelectionSoon();
   }

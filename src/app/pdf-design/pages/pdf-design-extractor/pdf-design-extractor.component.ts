@@ -130,6 +130,8 @@ export class PdfDesignExtractorComponent {
   readonly addedVideos = signal<AddedVideosMap>({});
   readonly addedTables = signal<AddedTablesMap>({});
   readonly addedRichTexts = signal<AddedRichTextsMap>({});
+  readonly userTextHasSelection = signal<Record<string, boolean>>({});
+  readonly userTextHasFocus = signal<Record<string, boolean>>({});
   readonly cropModal = signal<CropModalState | null>(null);
   readonly templates = signal<TemplateCluster[]>([]);
   readonly tokens = signal<DesignTokens>({ colors: [], fonts: [], sizes: [] });
@@ -156,6 +158,81 @@ export class PdfDesignExtractorComponent {
   private suppressImageClick = false;
   private tableUndoGate: { tableId: string | null; armed: boolean } = { tableId: null, armed: false };
   private placedTextUndoGate: string | null = null;
+
+  private sectionForPageNum(pageNum: number): ProposalSection | null {
+    this.ensureMandatorySections();
+    const secs = this.proposalSections();
+    if (!secs.length) return null;
+    const starts = secs
+      .map((s) => ({ s, start: this.sectionStartPageNum(s) }))
+      .sort((a, b) => a.start - b.start);
+    let best: ProposalSection | null = null;
+    for (const row of starts) {
+      if (row.start <= pageNum) best = row.s;
+      else break;
+    }
+    return best ?? starts[0]!.s;
+  }
+
+  private pageContentBounds(pn: number): { minX: number; minY: number; maxX: number; maxY: number } {
+    const pg = this.pages().find((p) => p.pageNum === pn) ?? null;
+    if (!pg) return { minX: 0, minY: 0, maxX: 0, maxY: 0 };
+    const sec = this.sectionForPageNum(pn);
+    const m = sec?.margins ?? this.defaultMargins();
+    const minX = Math.max(0, m.left ?? 0);
+    const minY = Math.max(0, m.top ?? 0);
+    const maxX = Math.max(minX, pg.width - Math.max(0, m.right ?? 0));
+    const maxY = Math.max(minY, pg.height - Math.max(0, m.bottom ?? 0));
+    return { minX, minY, maxX, maxY };
+  }
+
+  private resolvePlacementInContentBounds(
+    pn: number,
+    r: { x: number; y: number; w: number; h: number },
+    obstacles: readonly { x: number; y: number; w: number; h: number }[],
+    pw: number,
+    ph: number,
+    options: Parameters<typeof resolvePlacementRectAgainstObstacles>[4] = {},
+  ): { x: number; y: number; w: number; h: number } {
+    const b = this.pageContentBounds(pn);
+    const innerW = Math.max(0, b.maxX - b.minX);
+    const innerH = Math.max(0, b.maxY - b.minY);
+    if (innerW <= 0 || innerH <= 0) return resolvePlacementRectAgainstObstacles(r, obstacles, pw, ph, options);
+
+    const shift = (rr: { x: number; y: number; w: number; h: number }) => ({
+      x: rr.x - b.minX,
+      y: rr.y - b.minY,
+      w: rr.w,
+      h: rr.h,
+    });
+    const unshift = (rr: { x: number; y: number; w: number; h: number }) => ({
+      x: rr.x + b.minX,
+      y: rr.y + b.minY,
+      w: rr.w,
+      h: rr.h,
+    });
+
+    const shiftedObstacles = obstacles.map(shift);
+    const shifted = shift(r);
+    const shiftedOptions = {
+      ...options,
+      preferX: (options.preferX ?? r.x) - b.minX,
+      preferY: (options.preferY ?? r.y) - b.minY,
+    };
+    const resolved = resolvePlacementRectAgainstObstacles(shifted, shiftedObstacles, innerW, innerH, shiftedOptions);
+    const out = unshift(resolved);
+
+    // Final clamp inside content bounds (guards float drift and oversized rects).
+    const minX = b.minX;
+    const minY = b.minY;
+    const maxX = b.maxX;
+    const maxY = b.maxY;
+    const w = Math.min(out.w, Math.max(1, maxX - minX));
+    const h = Math.min(out.h, Math.max(1, maxY - minY));
+    const x = Math.min(Math.max(minX, out.x), Math.max(minX, maxX - w));
+    const y = Math.min(Math.max(minY, out.y), Math.max(minY, maxY - h));
+    return { x, y, w, h };
+  }
 
   readonly pg = computed(() => {
     const p = this.pages();
@@ -616,12 +693,15 @@ export class PdfDesignExtractorComponent {
     centerX?: number,
     centerY?: number,
   ): { x: number; y: number } {
+    const b = this.pageContentBounds(pg.pageNum);
     if (typeof centerX === 'number' && typeof centerY === 'number' && !Number.isNaN(centerX) && !Number.isNaN(centerY)) {
-      const x = Math.min(Math.max(centerX - w / 2, 0), Math.max(0, pg.width - w));
-      const y = Math.min(Math.max(centerY - h / 2, 0), Math.max(0, pg.height - h));
+      const x = Math.min(Math.max(centerX - w / 2, b.minX), Math.max(b.minX, b.maxX - w));
+      const y = Math.min(Math.max(centerY - h / 2, b.minY), Math.max(b.minY, b.maxY - h));
       return { x, y };
     }
-    return { x: Math.max(8, (pg.width - w) / 2), y: Math.max(8, (pg.height - h) / 2) };
+    const x = b.minX + Math.max(0, (Math.max(0, b.maxX - b.minX) - w) / 2);
+    const y = b.minY + Math.max(0, (Math.max(0, b.maxY - b.minY) - h) / 2);
+    return { x, y };
   }
 
   canUndo(): boolean {
@@ -1044,8 +1124,7 @@ export class PdfDesignExtractorComponent {
     const cols = 3;
     const w = Math.min(340, Math.max(120, pg.width * 0.5));
     const h = Math.min(220, Math.max(80, pg.height * 0.28));
-    const x = Math.max(8, (pg.width - w) / 2);
-    const y = Math.max(8, (pg.height - h) / 2);
+    const { x, y } = this.computeCenteredPlacementRect(pg, w, h);
     const tbl: TableElement = {
       id,
       type: 'table',
@@ -1131,6 +1210,42 @@ export class PdfDesignExtractorComponent {
       this.captureBeforeChange();
     }
     this.placedTextUndoGate = id;
+  }
+
+  setUserTextSelection(id: string, hasSelection: boolean): void {
+    this.userTextHasSelection.update((prev) => {
+      if (prev[id] === hasSelection) return prev;
+      return { ...prev, [id]: hasSelection };
+    });
+  }
+
+  setUserTextFocus(id: string, focused: boolean): void {
+    this.userTextHasFocus.update((prev) => {
+      if (prev[id] === focused) return prev;
+      return { ...prev, [id]: focused };
+    });
+  }
+
+  onUserTextDragHandlePointerDown(e: PointerEvent, rt: UserTextElement, enabled: boolean): void {
+    if (!enabled) return;
+    e.stopPropagation();
+    this.onImagePointerDown(e, rt);
+  }
+
+  onUserTextDragHandlePointerMove(e: PointerEvent, enabled: boolean): void {
+    if (!enabled) return;
+    this.onImagePointerMove(e);
+  }
+
+  onUserTextDragHandlePointerUp(e: PointerEvent, enabled: boolean): void {
+    if (!enabled) return;
+    this.onImagePointerUp(e);
+  }
+
+  onUserTextRemoveClick(e: MouseEvent, rt: UserTextElement, enabled: boolean): void {
+    if (!enabled) return;
+    e.stopPropagation();
+    this.removeUserTextInspector(rt);
   }
 
   updateUserTextHtml(id: string, innerHtml: string): void {
@@ -1595,7 +1710,7 @@ export class PdfDesignExtractorComponent {
       }
       const rawNr = rectFromResizeHandle(d.handle, d.startRect, px, py, d.pw, d.ph);
       const obstacles = this.placementObstacleRects(d.pn, d.elId);
-      const nr = resolvePlacementRectAgainstObstacles(rawNr, obstacles, d.pw, d.ph, {
+      const nr = this.resolvePlacementInContentBounds(d.pn, rawNr, obstacles, d.pw, d.ph, {
         preferX: rawNr.x,
         preferY: rawNr.y,
         allowShrink: true,
@@ -1616,10 +1731,12 @@ export class PdfDesignExtractorComponent {
     }
     let nx = px - d.grabDx;
     let ny = py - d.grabDy;
-    nx = Math.min(Math.max(0, nx), Math.max(0, d.pw - d.elW));
-    ny = Math.min(Math.max(0, ny), Math.max(0, d.ph - d.elH));
+    const b = this.pageContentBounds(d.pn);
+    nx = Math.min(Math.max(b.minX, nx), Math.max(b.minX, b.maxX - d.elW));
+    ny = Math.min(Math.max(b.minY, ny), Math.max(b.minY, b.maxY - d.elH));
     const moveObs = this.placementObstacleRects(d.pn, d.elId);
-    const resolved = resolvePlacementRectAgainstObstacles(
+    const resolved = this.resolvePlacementInContentBounds(
+      d.pn,
       { x: nx, y: ny, w: d.elW, h: d.elH },
       moveObs,
       d.pw,
@@ -1841,8 +1958,7 @@ export class PdfDesignExtractorComponent {
     const id = `rtxt_${pn}_${Date.now()}`;
     const w = Math.min(380, Math.max(200, pg.width * 0.5));
     const h = Math.min(280, Math.max(100, pg.height * 0.24));
-    const x = Math.max(8, (pg.width - w) / 2);
-    const y = Math.max(8, (pg.height - h) / 2);
+    const { x, y } = this.computeCenteredPlacementRect(pg, w, h);
     const block: UserTextElement = {
       id,
       type: 'userText',
@@ -2074,12 +2190,15 @@ export class PdfDesignExtractorComponent {
 
     // Represent edited PDF text as a userText block so we can reuse the rich-text editor UI.
     const rtId = `pdftext_${pn}_${el.id}`;
+    // When double-clicking PDF text to edit, expand the editor to full available page width.
+    // (Use remaining width from the original x so we don't overflow the page.)
+    const fullWidth = Math.max(80, pg.width - ob.x);
     const block: UserTextElement = {
       id: rtId,
       type: 'userText',
       x: ob.x,
       y: ob.y,
-      w: ob.w,
+      w: fullWidth,
       h: ob.h,
       html,
       _userAdded: true,
