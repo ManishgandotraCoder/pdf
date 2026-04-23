@@ -566,12 +566,18 @@ export function findImageAtPagePoint(
     const el = added[i];
     if (el.type === 'image' && inRect(el.x, el.y, el.w, el.h)) return el;
   }
-  for (let i = pg.images.length - 1; i >= 0; i--) {
-    const el = pg.images[i];
+  const pageEdits = imageEdits[pn] || {};
+  const candidates: { el: ImageElement; area: number }[] = [];
+  for (const el of pg.images) {
+    if (pageEdits[el.id]?.removed) continue;
     const b = getImageOverlayBounds(el, pn, imageEdits);
-    if (inRect(b.x, b.y, b.w, b.h)) return el;
+    if (!inRect(b.x, b.y, b.w, b.h)) continue;
+    candidates.push({ el, area: Math.max(1, b.w) * Math.max(1, b.h) });
   }
-  return null;
+  if (!candidates.length) return null;
+  // Prefer the most specific hit when PDF images overlap (smallest box under pointer).
+  candidates.sort((a, b) => a.area - b.area);
+  return candidates[0]!.el;
 }
 
 export function findVideoAtPagePoint(

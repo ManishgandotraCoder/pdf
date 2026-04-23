@@ -497,7 +497,7 @@
 
         @for (rt of addedRichTexts()[pgv.pageNum] || []; track rt.id) {
         @let selected = selEl()?.id === rt.id;
-        @let readOnly = editorMode() !== 'edit' || !selected;
+        @let readOnly = editorMode() !== 'edit';
         @let isPdfText = isPdfDerivedUserText(rt);
         @let sty = isPdfText ? pdfTextStyle(rt) : null;
         @let showChrome = selected && editorMode() === 'edit';
@@ -521,7 +521,7 @@
           [style.outline]="selected ? '2px solid #2aacb8' : 'none'" title="Text block"
           (mousedown)="onPlacedRichTextMousedown($event, readOnly)" (pointermove)="onImagePointerMove($event)"
           (pointerup)="onImagePointerUp($event)" (pointercancel)="onImagePointerUp($event)"
-          (click)="onPlacedRichTextClick($event, rt, readOnly)">
+          (click)="onPlacedRichTextClick($event, rt)">
           <div
             style="display: flex; align-items: flex-start; width: 100%; flex: 1; min-height: 0; box-sizing: border-box">
             @if (showLeftDrag) {

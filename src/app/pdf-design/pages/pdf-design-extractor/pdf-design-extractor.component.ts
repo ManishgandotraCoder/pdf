@@ -986,7 +986,7 @@ export class PdfDesignExtractorComponent {
 
       if (s.tokens) this.tokens.set(s.tokens);
       if (Array.isArray(s.proposalSections)) this.proposalSections.set(this.normalizeSections(s.proposalSections));
-      if (s.imageEdits) this.imageEdits.set(s.imageEdits);
+      if (s.imageEdits) this.imageEdits.set(this.migrateImageEditsToCurrentIds(s.imageEdits));
       if (s.layoutEdits) this.layoutEdits.set(s.layoutEdits);
       if (s.textEdits) this.textEdits.set(s.textEdits);
       if (s.addedImages) this.addedImages.set(s.addedImages);
@@ -1013,6 +1013,47 @@ export class PdfDesignExtractorComponent {
     } catch (err: unknown) {
       console.error(err);
     }
+  }
+
+  /**
+   * Older saved states used operator-order ids like `i_<pn>_<index>`.
+   * New extraction uses stable geometry/XObject ids. Remap old edits to the current page image ids
+   * by sorting images and using the old numeric index.
+   */
+  private migrateImageEditsToCurrentIds(saved: ImageEditsMap): ImageEditsMap {
+    const pages = this.pages();
+    const out: ImageEditsMap = {};
+    const oldIdRe = /^i_(\d+)_(\d+)$/;
+    for (const [pnStr, editsForPage] of Object.entries(saved || {})) {
+      const pn = Number(pnStr);
+      if (!Number.isFinite(pn) || !editsForPage) continue;
+      const pg = pages.find((p) => p.pageNum === pn);
+      if (!pg) {
+        out[pn] = editsForPage;
+        continue;
+      }
+
+      const existingIds = new Set(pg.images.map((im) => im.id));
+      const imagesByStableOrder = [...pg.images].sort(
+        (a, b) => a.y - b.y || a.x - b.x || a.w - b.w || a.h - b.h || a.id.localeCompare(b.id),
+      );
+
+      const next: Record<string, (typeof editsForPage)[string]> = {};
+      for (const [id, patch] of Object.entries(editsForPage)) {
+        if (existingIds.has(id)) {
+          next[id] = patch;
+          continue;
+        }
+        const m = id.match(oldIdRe);
+        if (!m) continue;
+        const idx = Number(m[2]);
+        const target = Number.isFinite(idx) ? imagesByStableOrder[idx] : undefined;
+        if (!target) continue;
+        next[target.id] = patch;
+      }
+      out[pn] = next;
+    }
+    return out;
   }
 
   private currentPdfEditorState(): unknown {
@@ -2116,8 +2157,8 @@ export class PdfDesignExtractorComponent {
     e.stopPropagation();
   }
 
-  onPlacedRichTextClick(e: MouseEvent, rt: UserTextElement, readOnly: boolean): void {
-    if (readOnly) return;
+  onPlacedRichTextClick(e: MouseEvent, rt: UserTextElement): void {
+    if (this.editorMode() !== 'edit') return;
     e.stopPropagation();
     this.selEl.set(rt);
   }

@@ -48,6 +48,9 @@ export async function extractPage(page: PDFPageProxy, pageNum: number): Promise<
   const docColors = new Set<string>();
   const shapes: ShapeElement[] = [];
   const images: ImageElement[] = [];
+  // Stable image ids prevent saved edits from applying to the wrong PDF image.
+  // Prefer the XObject name (when available) plus rounded geometry; fall back to geometry.
+  const imageIdCounts = new Map<string, number>();
   let pendingRect: { x: number; y: number; w: number; h: number } | null = null;
 
   for (let i = 0; i < fnArray.length; i++) {
@@ -130,6 +133,8 @@ export async function extractPage(page: PDFPageProxy, pageNum: number): Promise<
       }
       pendingRect = null;
     } else if (fn === OPS.paintImageXObject || fn === OPS.paintInlineImageXObject) {
+      const rawArgs = (argsArray[i] ?? []) as unknown[];
+      const xObjectName = typeof rawArgs[0] === 'string' ? String(rawArgs[0]) : '';
       const m = gs().ctm;
       const pts = [
         [m[4], m[5]],
@@ -142,11 +147,17 @@ export async function extractPage(page: PDFPageProxy, pageNum: number): Promise<
       const iw = Math.max(...xs) - Math.min(...xs);
       const ih = Math.max(...ys) - Math.min(...ys);
       if (iw > 20 && ih > 20) {
+        const ix = Math.min(...xs);
+        const iy = Math.min(...ys);
+        const geoKey = `${Math.round(ix)}_${Math.round(iy)}_${Math.round(iw)}_${Math.round(ih)}`;
+        const baseKey = xObjectName ? `${xObjectName}_${geoKey}` : geoKey;
+        const count = (imageIdCounts.get(baseKey) ?? 0) + 1;
+        imageIdCounts.set(baseKey, count);
         images.push({
-          id: `i_${pageNum}_${images.length}`,
+          id: `i_${pageNum}_${baseKey}_${count}`,
           type: 'image',
-          x: Math.min(...xs),
-          y: Math.min(...ys),
+          x: ix,
+          y: iy,
           w: iw,
           h: ih,
         });
