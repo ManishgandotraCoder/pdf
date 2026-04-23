@@ -630,61 +630,26 @@
           (pointerup)="onImagePointerUp($event)" (pointercancel)="onImagePointerUp($event)"
           (click)="onPlacedRichTextClick($event, rt, readOnly)">
           @if (!readOnly) {
-          <div style="
-                    height: 35px;
-                    flex-shrink: 0;
-                    touch-action: none;
+            <div role="presentation" (pointerdown)="$event.stopPropagation(); onImagePointerDown($event, rt)"
+            (pointermove)="onImagePointerMove($event)" (pointerup)="onImagePointerUp($event)"
+            (pointercancel)="onImagePointerUp($event)" style="
+                    flex: 1;
+                    min-width: 0;
+                    height: 100%;
                     display: flex;
                     align-items: center;
                     gap: 6px;
-                    font-size: 12px;
-                    font-weight: 600;
-                    user-select: none;
-                    background: linear-gradient(180deg, rgba(42, 172, 184, 0.22), rgba(42, 172, 184, 0.08));
-                    border-bottom: 1px solid rgba(42, 172, 184, 0.35);
-                    padding: 0 36px 0 5px;
-                  ">
-            <div role="presentation" (pointerdown)="$event.stopPropagation(); onImagePointerDown($event, rt)"
-              (pointermove)="onImagePointerMove($event)" (pointerup)="onImagePointerUp($event)"
-              (pointercancel)="onImagePointerUp($event)" style="
-                      flex: 1;
-                      min-width: 0;
-                      height: 100%;
-                      display: flex;
-                      align-items: center;
-                      gap: 6px;
-                    " [style.cursor]="draggingImageId() === rt.id ? 'grabbing' : 'grab'"
-              title="Text block — Drag to move · or hold Alt (⌥) and drag inside the text">
-              <span aria-hidden
-                style="letter-spacing: -2px; opacity: 0.7; font-weight: bolder; font-size: 14px;">⋮⋮</span>
-            </div>
+                  " [style.cursor]="draggingImageId() === rt.id ? 'grabbing' : 'grab'"
+            title="Text block — Drag to move · or hold Alt (⌥) and drag inside the text">
+            <span aria-hidden
+              style="letter-spacing: -2px; opacity: 0.7; font-weight: bolder; font-size: 14px;">⋮⋮</span>
           </div>
           }
           @if (selected && !readOnly) {
           <button type="button" title="Remove text block" aria-label="Remove text block"
             (pointerdown)="$event.stopPropagation()" (click)="$event.stopPropagation(); removeUserTextInspector(rt)"
-            style="
-                    position: absolute;
-                    top: 2px;
-                    right: 2px;
-                    z-index: 22;
-                    width: 28px;
-                    height: 28px;
-                    padding: 0;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    border-radius: 6px;
-                    border: 1px solid rgba(0, 0, 0, 0.1);
-                    background: rgba(255, 255, 255, 0.95);
-                    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
-                    color: #64748b;
-                    cursor: pointer;
-                  ">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-              stroke-linecap="round" aria-hidden="true">
-              <path d="M18 6L6 18M6 6l12 12" />
-            </svg>
+                  >
+           x
           </button>
           }
           <div style="flex: 1; min-height: 0; overflow: hidden"
@@ -692,7 +657,8 @@
             [style.font-size.px]="sty?.fontSizePx || null"
             [style.font-weight]="sty?.fontWeight || null"
             [style.font-style]="sty?.fontStyle || null"
-            [style.color]="sty?.color || null">
+            [style.color]="sty?.color || null"
+            >
             <app-placed-user-text-body [html]="rt.html" [readOnly]="readOnly"
               (htmlChange)="updateUserTextHtml(rt.id, $event)" (focusFirstEdit)="onPlacedUserTextFocus(rt.id)"
               (pointerMove)="onImagePointerMove($event)" (pointerUp)="onImagePointerUp($event)"

@@ -3,12 +3,7 @@
     style="
       height: 100%;
       overflow: auto;
-      padding: 6px 8px;
-      font-size: 14px;
-      line-height: 1.5;
-      color: #334155;
-      word-break: break-word;
-    "
+      width:100vw"
     [innerHTML]="(html() || '<p><br></p>') | safeHtml"
   ></div>
 } @else {
@@ -24,7 +19,7 @@
     style="
       height: 100%;
       overflow: auto;
-      padding: 6px 8px;
+      width:100vw;
       outline: none;
       font-size: 14px;
       line-height: 1.5;
