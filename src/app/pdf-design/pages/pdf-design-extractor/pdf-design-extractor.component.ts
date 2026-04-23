@@ -86,6 +86,7 @@ export class PdfDesignExtractorComponent {
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly pdfsApi = inject(PdfsApiService);
+  private readonly defaultZoom = 0.8;
   private openedPdfId: string | null = null;
   private loadedPdfBuf: ArrayBuffer | null = null;
   private readonly w = globalThis;
@@ -138,7 +139,7 @@ export class PdfDesignExtractorComponent {
   readonly tokens = signal<DesignTokens>({ colors: [], fonts: [], sizes: [] });
   readonly editorMode = signal<'edit' | 'view'>('view');
   readonly activeAddTool = signal<'image' | 'video' | 'table' | 'userText' | null>(null);
-  readonly zoom = signal(0.8);
+  readonly zoom = signal(this.defaultZoom);
   readonly viewerImageDropActive = signal(false);
   readonly draggingImageId = signal<string | null>(null);
   readonly historyUi = signal(0);
@@ -680,6 +681,7 @@ export class PdfDesignExtractorComponent {
     this.addedVideos.set({});
     this.addedTables.set({});
     this.addedRichTexts.set({});
+    this.zoom.set(this.defaultZoom);
     this.historyStack = [];
     this.redoStack = [];
     this.historyUi.update((u) => u + 1);
@@ -1905,6 +1907,7 @@ export class PdfDesignExtractorComponent {
     this.addedVideos.set({});
     this.addedTables.set({});
     this.addedRichTexts.set({});
+    this.zoom.set(this.defaultZoom);
     this.proposalSections.set(this.normalizeSections([]));
     this.activeSectionId.set('sec_mandatory_cover');
     this.historyStack = [];
