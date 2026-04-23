@@ -6,28 +6,48 @@
 @let pgv = pg()!;
 <div class="workspace" [class.workspace--preview]="previewMode()">
   <!-- LEFT -->
-  <div class="sidebar">
+  <div class="sidebar" [class.sidebar--collapsed]="leftSidebarCollapsed()">
     <div class="sidebar__header">
-      <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 4px">
-        <span style="font-size: 14px; font-weight: 700; color: #0f172a; font-variant-numeric: tabular-nums">
-          Page {{ pgv.pageNum }}/{{ pages().length }}
-        </span>
-        @if (totalEdits() + totalImageMods() > 0) {
-        <span style="font-size: 10px; color: #d97706; font-weight: 600">
-          @if (totalEdits() > 0) {
-          {{ totalEdits() }} text
-          }
-          @if (totalEdits() > 0 && totalImageMods() > 0) {
-          ·
-          }
-          @if (totalImageMods() > 0) {
-          {{ totalImageMods() }} media
-          }
-        </span>
+      <div class="sidebar__header-top">
+        @if (!leftSidebarCollapsed()) {
+        <div class="sidebar__meta">
+          <div class="sidebar__page-status">
+            <span class="sidebar__page-status-current">
+              Page {{ pgv.pageNum }}/{{ pages().length }}
+            </span>
+            @if (totalEdits() + totalImageMods() > 0) {
+            <span class="sidebar__page-status-edits">
+              @if (totalEdits() > 0) {
+              {{ totalEdits() }} text
+              }
+              @if (totalEdits() > 0 && totalImageMods() > 0) {
+              ·
+              }
+              @if (totalImageMods() > 0) {
+              {{ totalImageMods() }} media
+              }
+            </span>
+            }
+          </div>
+        </div>
         }
+        <button
+          type="button"
+          class="sidebar__collapse-btn"
+          [attr.title]="leftSidebarCollapsed() ? 'Expand left sidebar' : 'Collapse left sidebar'"
+          [attr.aria-label]="leftSidebarCollapsed() ? 'Expand left sidebar' : 'Collapse left sidebar'"
+          [attr.aria-pressed]="leftSidebarCollapsed()"
+          (click)="toggleLeftSidebar()"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            aria-hidden="true">
+            <path d="M15 18l-6-6 6-6" />
+          </svg>
+        </button>
       </div>
     </div>
     <div class="sidebar__scroll">
+      @if (!leftSidebarCollapsed()) {
       <div class="sidebar__section-label">Proposal sections</div>
       <div data-sections-menu style="position: relative; padding: 0 4px 10px">
         <button type="button" (click)="toggleSectionsMenu()" style="
@@ -156,67 +176,35 @@
       <div class="sidebar__section-label">
         Pages
       </div>
-      @for (p of pages(); track p.pageNum; let idx = $index) {
-      <div (click)="selPage.set(idx); selEl.set(null); setActiveSectionFromPage()" style="
-              margin-bottom: 8px;
-              cursor: pointer;
-              border-radius: 6px;
-              overflow: hidden;
-              border: 2px solid transparent;
-              position: relative;
-              transition: border-color 0.15s;
-            " [style.border-color]="idx === selPage() ? '#2aacb8' : 'transparent'">
-        <button type="button" [title]="pages().length <= 1 ? 'Cannot delete the only page' : 'Delete page ' + p.pageNum"
-          [attr.aria-label]="'Delete page ' + p.pageNum" (click)="$event.stopPropagation(); deletePageAtIndex(idx)"
-          [disabled]="pages().length <= 1" style="
-                position: absolute;
-                top: 4px;
-                left: 4px;
-                z-index: 2;
-                width: 28px;
-                height: 28px;
-                padding: 0;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                border-radius: 6px;
-                border: 1px solid rgba(0, 0, 0, 0.1);
-                background: rgba(255, 255, 255, 0.95);
-                box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
-              " [style.color]="pages().length <= 1 ? '#cbd5e1' : '#b91c1c'"
-          [style.cursor]="pages().length <= 1 ? 'not-allowed' : 'pointer'">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-            stroke-linecap="round" aria-hidden="true">
-            <path d="M18 6L6 18M6 6l12 12" />
-          </svg>
-        </button>
-        <img [src]="p.thumbUrl" style="width: 100%; display: block" [alt]="'p' + p.pageNum" />
-        <div style="
-                position: absolute;
-                bottom: 4px;
-                right: 4px;
-                background: rgba(0, 0, 0, 0.75);
-                color: #fff;
-                font-size: 9px;
-                padding: 1px 5px;
-                border-radius: 3px;
-                font-weight: 600;
-              ">
-          {{ p.pageNum }}
+      }
+      <div class="sidebar__page-list" [class.sidebar__page-list--collapsed]="leftSidebarCollapsed()">
+        @for (p of pages(); track p.pageNum; let idx = $index) {
+        <div
+          class="sidebar__page-card"
+          [class.sidebar__page-card--collapsed]="leftSidebarCollapsed()"
+          (click)="selPage.set(idx); selEl.set(null); setActiveSectionFromPage()"
+          [style.border-color]="idx === selPage() ? '#2aacb8' : 'transparent'"
+        >
+          <button type="button" [title]="pages().length <= 1 ? 'Cannot delete the only page' : 'Delete page ' + p.pageNum"
+            [attr.aria-label]="'Delete page ' + p.pageNum" (click)="$event.stopPropagation(); deletePageAtIndex(idx)"
+            [disabled]="pages().length <= 1" class="sidebar__page-delete"
+            [style.color]="pages().length <= 1 ? '#cbd5e1' : '#b91c1c'"
+            [style.cursor]="pages().length <= 1 ? 'not-allowed' : 'pointer'">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round" aria-hidden="true">
+              <path d="M18 6L6 18M6 6l12 12" />
+            </svg>
+          </button>
+          <img [src]="p.thumbUrl" class="sidebar__page-thumb" [alt]="'p' + p.pageNum" />
+          <div class="sidebar__page-number">
+            {{ p.pageNum }}
+          </div>
+          @if (pageHasImageMods(p.pageNum)) {
+          <div class="sidebar__page-indicator"></div>
+          }
         </div>
-        @if (pageHasImageMods(p.pageNum)) {
-        <div style="
-                  position: absolute;
-                  top: 4px;
-                  right: 4px;
-                  background: #f59e0b;
-                  width: 8px;
-                  height: 8px;
-                  border-radius: 50%;
-                "></div>
         }
       </div>
-      }
     </div>
   </div>
 

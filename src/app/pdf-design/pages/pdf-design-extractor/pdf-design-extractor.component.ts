@@ -106,6 +106,7 @@ export class PdfDesignExtractorComponent {
   readonly activeSectionId = signal<string>('sec_mandatory_cover');
   readonly exportMenuOpen = signal(false);
   readonly sectionsMenuOpen = signal(false);
+  readonly leftSidebarCollapsed = signal(true);
   private sectionDragKey: string | null = null;
 
   readonly sectionCatalog = PROPOSAL_SECTION_CATALOG;
@@ -137,7 +138,7 @@ export class PdfDesignExtractorComponent {
   readonly tokens = signal<DesignTokens>({ colors: [], fonts: [], sizes: [] });
   readonly editorMode = signal<'edit' | 'view'>('view');
   readonly activeAddTool = signal<'image' | 'video' | 'table' | 'userText' | null>(null);
-  readonly zoom = signal(0.9);
+  readonly zoom = signal(0.8);
   readonly viewerImageDropActive = signal(false);
   readonly draggingImageId = signal<string | null>(null);
   readonly historyUi = signal(0);
@@ -2404,6 +2405,12 @@ export class PdfDesignExtractorComponent {
 
   toggleSectionsMenu(): void {
     this.sectionsMenuOpen.update((v) => !v);
+  }
+
+  toggleLeftSidebar(): void {
+    const next = !this.leftSidebarCollapsed();
+    this.leftSidebarCollapsed.set(next);
+    if (next) this.sectionsMenuOpen.set(false);
   }
 
   closeSectionsMenu(): void {
