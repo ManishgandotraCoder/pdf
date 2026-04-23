@@ -68,6 +68,10 @@ import { ensureTableCells, isProbablyHtml } from '../../utils/rich-text.utils';
 import { PdfsApiService } from '../../services/pdfs-api.service';
 import { PlacedTableHeaderComponent } from '../../components/placed-table-header/placed-table-header.component';
 
+type PageLayoutEntry =
+  | { kind: 'source'; sourcePageNum: number }
+  | { kind: 'blank'; width: number; height: number; bgColor: string };
+
 @Component({
   selector: 'app-pdf-design-extractor',
   standalone: true,
@@ -93,6 +97,10 @@ export class PdfDesignExtractorComponent {
   private readonly w = globalThis;
 
   private readonly mandatoryCatalogIds = new Set<string>(['cover', 'acceptance']);
+  private readonly sourcePages = signal<PageData[]>([]);
+
+  /** Structural page order: source PDF pages + inserted blank pages. */
+  readonly pageLayout = signal<PageLayoutEntry[]>([]);
 
   /** Read-only preview tab: hides editor chrome (see `?preview=1`). */
   readonly previewMode = toSignal(
@@ -161,6 +169,7 @@ export class PdfDesignExtractorComponent {
   private suppressImageClick = false;
   private tableUndoGate: { tableId: string | null; armed: boolean } = { tableId: null, armed: false };
   private placedTextUndoGate: string | null = null;
+  private pendingAddToolDrop: { kind: 'image' | 'video'; x: number; y: number } | null = null;
 
   private sectionForPageNum(pageNum: number): ProposalSection | null {
     this.ensureMandatorySections();
@@ -688,6 +697,50 @@ export class PdfDesignExtractorComponent {
     this.historyUi.update((u) => u + 1);
     this.activeSectionId.set('sec_mandatory_cover');
     this.proposalSections.set(this.normalizeSections([]));
+    this.sourcePages.set([]);
+    this.pageLayout.set([]);
+  }
+
+  private normalizePageLayout(
+    layout: unknown,
+    sourceCount: number,
+  ): { ok: true; layout: PageLayoutEntry[] } | { ok: false } {
+    if (!Array.isArray(layout)) return { ok: false };
+    const out: PageLayoutEntry[] = [];
+    for (const row of layout) {
+      if (!row || typeof row !== 'object') continue;
+      const kind = (row as { kind?: unknown }).kind;
+      if (kind === 'source') {
+        const pn = Number((row as { sourcePageNum?: unknown }).sourcePageNum);
+        if (Number.isFinite(pn) && pn >= 1 && pn <= sourceCount) out.push({ kind: 'source', sourcePageNum: pn });
+        continue;
+      }
+      if (kind === 'blank') {
+        const width = Number((row as { width?: unknown }).width);
+        const height = Number((row as { height?: unknown }).height);
+        const bgColor = String((row as { bgColor?: unknown }).bgColor ?? '').trim();
+        if (Number.isFinite(width) && Number.isFinite(height) && width > 0 && height > 0) {
+          out.push({ kind: 'blank', width, height, bgColor: bgColor || '#ffffff' });
+        }
+      }
+    }
+    return { ok: true, layout: out };
+  }
+
+  private applyPageLayout(layout: PageLayoutEntry[]): void {
+    const source = this.sourcePages();
+    if (!source.length) return;
+    const newPages: PageData[] = layout.map((entry, idx) => {
+      if (entry.kind === 'source') {
+        const src = source.find((p) => p.pageNum === entry.sourcePageNum) ?? source[entry.sourcePageNum - 1];
+        const cloned = structuredClone(src);
+        return { ...cloned, pageNum: idx + 1 };
+      }
+      const blank = createBlankPageData(entry.width, entry.height, entry.bgColor);
+      return { ...blank, pageNum: idx + 1 };
+    });
+    this.pages.set(newPages);
+    this.templates.set(clusterTemplates(newPages));
   }
 
   private computeCenteredPlacementRect(
@@ -854,6 +907,7 @@ export class PdfDesignExtractorComponent {
     this.addedVideos.update((prev) => remapPageKeyedState(prev, delPn));
     this.addedTables.update((prev) => remapPageKeyedState(prev, delPn));
     this.addedRichTexts.update((prev) => remapPageKeyedState(prev, delPn));
+    this.pageLayout.update((prev) => prev.filter((_, i) => i !== delIdx));
     this.selEl.set(null);
     this.selPage.update((prev) => {
       if (delIdx < prev) return prev - 1;
@@ -884,6 +938,11 @@ export class PdfDesignExtractorComponent {
     this.addedVideos.update((prev) => remapPageKeyedStateInsert(prev, insert1Based));
     this.addedTables.update((prev) => remapPageKeyedStateInsert(prev, insert1Based));
     this.addedRichTexts.update((prev) => remapPageKeyedStateInsert(prev, insert1Based));
+    this.pageLayout.update((prev) => [
+      ...prev.slice(0, insertIdx),
+      { kind: 'blank', width: W, height: H, bgColor: refPg.bgColor },
+      ...prev.slice(insertIdx),
+    ]);
     this.selEl.set(null);
     this.selPage.set(insertIdx);
   }
@@ -942,6 +1001,9 @@ export class PdfDesignExtractorComponent {
     });
     this.templates.set(clusters);
     this.pages.set([...all]);
+    // Keep an immutable snapshot of the source PDF pages so we can re-apply saved structural edits (inserted blank pages, deletions).
+    this.sourcePages.set(structuredClone(all));
+    this.pageLayout.set(all.map((p) => ({ kind: 'source', sourcePageNum: p.pageNum })));
     const ac = new Set<string>();
     const af = new Set<string>();
     const asz = new Set<number>();
@@ -969,6 +1031,7 @@ export class PdfDesignExtractorComponent {
       const payload = res?.state?.state;
       if (!payload || typeof payload !== 'object') return;
       const s = payload as Partial<{
+        pageLayout: unknown;
         tokens: DesignTokens;
         imageEdits: ImageEditsMap;
         layoutEdits: LayoutEditsMap;
@@ -983,6 +1046,13 @@ export class PdfDesignExtractorComponent {
         editorMode: 'edit' | 'view';
         activeAddTool: 'image' | 'video' | 'table' | 'userText' | null;
       }>;
+
+      // Structural page edits must be applied before we restore per-page overlays/edits.
+      const norm = this.normalizePageLayout(s.pageLayout, this.sourcePages().length);
+      if (norm.ok && norm.layout.length) {
+        this.pageLayout.set(norm.layout);
+        this.applyPageLayout(norm.layout);
+      }
 
       if (s.tokens) this.tokens.set(s.tokens);
       if (Array.isArray(s.proposalSections)) this.proposalSections.set(this.normalizeSections(s.proposalSections));
@@ -1058,6 +1128,7 @@ export class PdfDesignExtractorComponent {
 
   private currentPdfEditorState(): unknown {
     return {
+      pageLayout: structuredClone(this.pageLayout()),
       tokens: structuredClone(this.tokens()),
       imageEdits: structuredClone(this.imageEdits()),
       layoutEdits: structuredClone(this.layoutEdits()),
@@ -1453,10 +1524,6 @@ export class PdfDesignExtractorComponent {
     e.preventDefault();
     e.stopPropagation();
     this.viewerImageDropActive.set(false);
-    let file = await imageFileFromDataTransfer(e.dataTransfer);
-    if (!file) file = Array.from(e.dataTransfer?.files || []).find(isLikelyVideoFile) || null;
-    if (!file) return;
-    this.editorMode.set('edit');
     const inner = this.pageStageRef()?.nativeElement;
     const pgLocal = this.pages()[this.selPage()];
     if (!inner || !pgLocal) return;
@@ -1464,6 +1531,21 @@ export class PdfDesignExtractorComponent {
     const z = this.zoom();
     const x = (e.clientX - r.left) / z;
     const y = (e.clientY - r.top) / z;
+
+    const toolKind = (e.dataTransfer?.getData('application/x-avyro-add-tool') || '').trim();
+    if (toolKind === 'image' || toolKind === 'video') {
+      this.editorMode.set('edit');
+      this.activeAddTool.set(toolKind);
+      this.pendingAddToolDrop = { kind: toolKind, x, y };
+      if (toolKind === 'image') this.clickAddImage();
+      else this.clickAddVideo();
+      return;
+    }
+
+    let file = await imageFileFromDataTransfer(e.dataTransfer);
+    if (!file) file = Array.from(e.dataTransfer?.files || []).find(isLikelyVideoFile) || null;
+    if (!file) return;
+    this.editorMode.set('edit');
     if (isLikelyVideoFile(file)) {
       const vhit = findVideoAtPagePoint(pgLocal.pageNum, this.addedVideos(), x, y);
       if (vhit) this.handleReplaceVideo(vhit, file);
@@ -2172,6 +2254,32 @@ export class PdfDesignExtractorComponent {
     this.selEl.set(rt);
   }
 
+  private shouldStartPlacementDragFromTarget(target: EventTarget | null): boolean {
+    const el = target as HTMLElement | null;
+    if (!el) return true;
+    // Don't start dragging when the user is interacting with editable controls/content.
+    if (el.closest('input, textarea, select, button, [contenteditable="true"], a')) return false;
+    // Tables contain an interactive grid; dragging should start from the chrome/header, not the cell area.
+    if (el.closest('app-placed-table-grid')) return false;
+    return true;
+  }
+
+  onPlacedVideoPointerDown(e: PointerEvent, v: VideoElement, readOnly: boolean): void {
+    if (readOnly) return;
+    if (!this.shouldStartPlacementDragFromTarget(e.target)) return;
+    this.editorMode.set('edit');
+    this.selEl.set(v);
+    this.onImagePointerDown(e, v);
+  }
+
+  onPlacedTablePointerDown(e: PointerEvent, t: TableElement, readOnly: boolean): void {
+    if (readOnly) return;
+    if (!this.shouldStartPlacementDragFromTarget(e.target)) return;
+    this.editorMode.set('edit');
+    this.selEl.set(t);
+    this.onImagePointerDown(e, t);
+  }
+
   applyCropResult(url: string): void {
     const m = this.cropModal();
     if (m) m.resolve(url);
@@ -2333,14 +2441,25 @@ export class PdfDesignExtractorComponent {
 
   onAddImageFile(e: Event): void {
     const f = (e.target as HTMLInputElement).files?.[0];
-    if (f) void this.addImageFromFile(f);
+    const pos = this.pendingAddToolDrop?.kind === 'image' ? this.pendingAddToolDrop : null;
+    this.pendingAddToolDrop = null;
+    if (f) void this.addImageFromFile(f, pos?.x, pos?.y);
     (e.target as HTMLInputElement).value = '';
   }
 
   onAddVideoFile(e: Event): void {
     const f = (e.target as HTMLInputElement).files?.[0];
-    if (f) void this.addVideoFromFile(f);
+    const pos = this.pendingAddToolDrop?.kind === 'video' ? this.pendingAddToolDrop : null;
+    this.pendingAddToolDrop = null;
+    if (f) void this.addVideoFromFile(f, pos?.x, pos?.y);
     (e.target as HTMLInputElement).value = '';
+  }
+
+  onAddToolDragStart(e: DragEvent, kind: 'image' | 'video'): void {
+    if (this.editorMode() === 'view') return;
+    if (!e.dataTransfer) return;
+    e.dataTransfer.setData('application/x-avyro-add-tool', kind);
+    e.dataTransfer.effectAllowed = 'copy';
   }
 
   readonly Math = Math;

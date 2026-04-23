@@ -366,8 +366,22 @@
         <canvas #canvas style="display: block"></canvas>
 
         @for (v of addedVideos()[pgv.pageNum] || []; track v.id) {
-        <div style="position: absolute; border-radius: 2px; overflow: hidden" [style.left.px]="v.x" [style.top.px]="v.y"
-          [style.width.px]="v.w" [style.height.px]="v.h" title="Video">
+        @let selected = selEl()?.id === v.id;
+        @let readOnly = editorMode() !== 'edit';
+        <div
+          style="position: absolute; border-radius: 2px; overflow: hidden; box-sizing: border-box; pointer-events: auto"
+          [style.left.px]="v.x"
+          [style.top.px]="v.y"
+          [style.width.px]="v.w"
+          [style.height.px]="v.h"
+          [style.outline]="selected && !readOnly ? '2px solid #2aacb8' : 'none'"
+          title="Video"
+          (pointerdown)="onPlacedVideoPointerDown($event, v, readOnly)"
+          (pointermove)="onImagePointerMove($event)"
+          (pointerup)="onImagePointerUp($event)"
+          (pointercancel)="onImagePointerUp($event)"
+          (click)="$event.stopPropagation(); !readOnly ? selEl.set(v) : null"
+        >
           <video [attr.data-added-video-id]="v.id" [src]="v.src" muted playsinline loop autoplay
             (loadedmetadata)="syncAddedVideoPlaying(v.id, $event)" (play)="syncAddedVideoPlaying(v.id, $event)"
             (pause)="syncAddedVideoPlaying(v.id, $event)" style="
@@ -380,7 +394,7 @@
                   pointer-events: none;
                   border-radius: 2px;
                 "></video>
-          @if (editorMode() === 'view') {
+          @if (editorMode() === 'view' || (editorMode() === 'edit' && selected)) {
           <button type="button" [attr.title]="addedVideoPlaying()[v.id] ? 'Pause' : 'Play'"
             [attr.aria-label]="addedVideoPlaying()[v.id] ? 'Pause' : 'Play'" (pointerdown)="$event.stopPropagation()"
             (click)="toggleAddedVideoPlayback($event, v.id)" style="
@@ -408,6 +422,97 @@
             </svg>
             }
           </button>
+          }
+          @if (selected && !readOnly) {
+          @for (rh of resizeHandleList; track rh.id) {
+          <div
+            [style]="resizeHandleBoxStyle(rh)"
+            (pointerdown)="onResizeHandlePointerDown($event, v, rh.id)"
+            (pointermove)="onImagePointerMove($event)"
+            (pointerup)="onImagePointerUp($event)"
+            (pointercancel)="onImagePointerUp($event)"
+          ></div>
+          }
+          }
+        </div>
+        }
+
+        @for (im of pgv.images; track im.id) {
+        @if (!imageEdits()[pgv.pageNum]?.[im.id]?.removed) {
+        @let selected = selEl()?.id === im.id;
+        @let readOnly = editorMode() !== 'edit';
+        @let ob = overlayBounds(im);
+        <div
+          style="
+            position: absolute;
+            z-index: 2;
+            box-sizing: border-box;
+            pointer-events: auto;
+            background: transparent;
+          "
+          [style.left.px]="ob.x"
+          [style.top.px]="ob.y"
+          [style.width.px]="ob.w"
+          [style.height.px]="ob.h"
+          [style.outline]="selected && !readOnly ? '2px solid #2aacb8' : 'none'"
+          [style.cursor]="readOnly ? 'default' : (draggingImageId() === im.id ? 'grabbing' : 'grab')"
+          title="Image"
+          (pointerdown)="!readOnly ? onImagePointerDown($event, im) : null"
+          (pointermove)="onImagePointerMove($event)"
+          (pointerup)="onImagePointerUp($event)"
+          (pointercancel)="onImagePointerUp($event)"
+          (click)="$event.stopPropagation(); !readOnly ? selEl.set(im) : null"
+        >
+          @if (selected && !readOnly) {
+          @for (rh of resizeHandleList; track rh.id) {
+          <div
+            [style]="resizeHandleBoxStyle(rh)"
+            (pointerdown)="onResizeHandlePointerDown($event, im, rh.id)"
+            (pointermove)="onImagePointerMove($event)"
+            (pointerup)="onImagePointerUp($event)"
+            (pointercancel)="onImagePointerUp($event)"
+          ></div>
+          }
+          }
+        </div>
+        }
+        }
+
+        @for (uim of addedImages()[pgv.pageNum] || []; track uim.id) {
+        @let selected = selEl()?.id === uim.id;
+        @let readOnly = editorMode() !== 'edit';
+        @let ob = overlayBounds(uim);
+        <div
+          style="
+            position: absolute;
+            z-index: 2;
+            box-sizing: border-box;
+            pointer-events: auto;
+            background: transparent;
+          "
+          [style.left.px]="ob.x"
+          [style.top.px]="ob.y"
+          [style.width.px]="ob.w"
+          [style.height.px]="ob.h"
+          [style.outline]="selected && !readOnly ? '2px solid #2aacb8' : 'none'"
+          [style.cursor]="readOnly ? 'default' : (draggingImageId() === uim.id ? 'grabbing' : 'grab')"
+          title="Image"
+          (pointerdown)="!readOnly ? onImagePointerDown($event, uim) : null"
+          (pointermove)="onImagePointerMove($event)"
+          (pointerup)="onImagePointerUp($event)"
+          (pointercancel)="onImagePointerUp($event)"
+          (click)="$event.stopPropagation(); !readOnly ? selEl.set(uim) : null"
+        >
+          @if (selected && !readOnly) {
+          @for (rh of resizeHandleList; track rh.id) {
+          <div
+            [style]="resizeHandleBoxStyle(rh)"
+            (pointerdown)="onResizeHandlePointerDown($event, uim, rh.id)"
+            (pointermove)="onImagePointerMove($event)"
+            (pointerup)="onImagePointerUp($event)"
+            (pointercancel)="onImagePointerUp($event)"
+          ></div>
+          }
           }
         </div>
         }
@@ -466,6 +571,7 @@
                 pointer-events: auto;
               " [style.left.px]="t.x" [style.top.px]="t.y" [style.width.px]="t.w" [style.height.px]="t.h"
           [style.outline]="selected ? '2px solid #2aacb8' : 'none'" title="Table"
+          (pointerdown)="onPlacedTablePointerDown($event, t, readOnly)"
           (mousedown)="onPlacedTableMousedown($event, readOnly)" (pointermove)="onImagePointerMove($event)"
           (pointerup)="onImagePointerUp($event)" (pointercancel)="onImagePointerUp($event)"
           (click)="onPlacedTableClick($event, t, readOnly)">
@@ -787,6 +893,8 @@
         <div class="tooltip-wrapper">
           <button type="button" [disabled]="editorMode() === 'view'"
             (click)="activeAddTool.set('image'); clickAddImage()"
+            [attr.draggable]="editorMode() === 'view' ? null : 'true'"
+            (dragstart)="onAddToolDragStart($event, 'image')"
             style="width:40px; height:40px; display:flex; align-items:center; justify-content:center; border-radius:8px; transition:all 0.2s cubic-bezier(0.4,0,0.2,1); background:#fff; box-shadow:0 1px 2px rgba(0,0,0,0.08)"
             [style.border]="'1px solid ' + (activeAddTool() === 'image' ? '#1976d2' : 'rgba(0,0,0,0.12)')"
             [style.color]="activeAddTool() === 'image' ? '#1976d2' : '#2e7d32'"
@@ -826,6 +934,8 @@
         <div class="tooltip-wrapper">
           <button type="button" [disabled]="editorMode() === 'view'"
             (click)="activeAddTool.set('video'); clickAddVideo()"
+            [attr.draggable]="editorMode() === 'view' ? null : 'true'"
+            (dragstart)="onAddToolDragStart($event, 'video')"
             style="width:40px; height:40px; display:flex; align-items:center; justify-content:center; border-radius:8px; transition:all 0.2s cubic-bezier(0.4,0,0.2,1); background:#fff; box-shadow:0 1px 2px rgba(0,0,0,0.08)"
             [style.border]="'1px solid ' + (activeAddTool() === 'video' ? '#1976d2' : 'rgba(0,0,0,0.12)')"
             [style.color]="activeAddTool() === 'video' ? '#1976d2' : '#6a1b9a'"
