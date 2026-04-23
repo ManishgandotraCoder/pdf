@@ -639,6 +639,7 @@
             style="display: flex; align-items: flex-start; width: 100%; flex: 1; min-height: 0; box-sizing: border-box; overflow: hidden">
             <div
               style="flex: 1; min-height: 0; min-width: 0; overflow: hidden; display: flex; flex-direction: column; text-align: left; box-sizing: border-box"
+              [class.pdf-derived-text]="isPdfText"
               [style.cursor]="readOnly ? null : 'text'"
               [style.padding]="isPdfText ? '0' : '8px 10px'"
               [style.font-family]="sty?.fontFamily || null"
@@ -646,7 +647,7 @@
               [style.font-weight]="sty?.fontWeight || null"
               [style.font-style]="sty?.fontStyle || null"
               [style.color]="sty?.color || null"
-              [style.line-height]="isPdfText ? 'normal' : '1.45'"
+              [style.line-height]="isPdfText ? '1.2' : '1.45'"
             >
               <div style="flex: 1; min-width: 0; display: flex; justify-content: flex-start">
                 <app-placed-user-text-body [html]="rt.html" [readOnly]="readOnly" [attr.data-user-text-id]="rt.id"

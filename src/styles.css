@@ -1111,6 +1111,25 @@ select:focus-visible {
   padding-left: 1.5em;
 }
 
+/* PDF-derived text blocks should preserve PDF-like spacing (no paragraph/list margins). */
+.pdf-derived-text .placed-user-text-body p,
+.pdf-derived-text .placed-user-text-body div,
+.pdf-derived-text .placed-user-text-body blockquote,
+.pdf-derived-text .placed-user-text-body h1,
+.pdf-derived-text .placed-user-text-body h2,
+.pdf-derived-text .placed-user-text-body h3,
+.pdf-derived-text .placed-user-text-body h4,
+.pdf-derived-text .placed-user-text-body h5,
+.pdf-derived-text .placed-user-text-body h6 {
+  margin: 0;
+}
+
+.pdf-derived-text .placed-user-text-body ul,
+.pdf-derived-text .placed-user-text-body ol {
+  margin: 0;
+  padding-left: 1.2em;
+}
+
 /* Inline edit textarea (canvas) */
 /* NOTE: text colour is NOT set here — it is bound via [style.color] from el.style.color */
 .edit-textarea {
