@@ -143,23 +143,30 @@ function createTextRegions(lines: readonly TextLine[]): TextRegion[] {
   const regions: TextRegion[] = [];
 
   for (const line of lines) {
-    const current = regions[regions.length - 1];
-    if (!current) {
+    let bestRegion: TextRegion | null = null;
+    let bestScore = Number.NEGATIVE_INFINITY;
+
+    for (const region of regions) {
+      const score = regionJoinScore(region, line);
+      if (score > bestScore) {
+        bestScore = score;
+        bestRegion = region;
+      }
+    }
+
+    if (!bestRegion) {
       regions.push(startRegion(line));
       continue;
     }
-    if (shouldJoinRegion(current, line)) {
-      current.lines.push(line);
-      current.x = Math.min(current.x, line.x);
-      current.y = Math.min(current.y, line.y);
-      current.right = Math.max(current.right, line.right);
-      current.bottom = Math.max(current.bottom, line.y + line.h);
-    } else {
-      regions.push(startRegion(line));
-    }
+
+    appendLineToRegion(bestRegion, line);
   }
 
-  return regions;
+  for (const region of regions) {
+    region.lines.sort((a, b) => a.y - b.y || a.x - b.x);
+  }
+
+  return regions.sort((a, b) => a.y - b.y || a.x - b.x);
 }
 
 function startRegion(line: TextLine): TextRegion {
@@ -170,6 +177,14 @@ function startRegion(line: TextLine): TextRegion {
     right: line.right,
     bottom: line.y + line.h,
   };
+}
+
+function appendLineToRegion(region: TextRegion, line: TextLine): void {
+  region.lines.push(line);
+  region.x = Math.min(region.x, line.x);
+  region.y = Math.min(region.y, line.y);
+  region.right = Math.max(region.right, line.right);
+  region.bottom = Math.max(region.bottom, line.y + line.h);
 }
 
 function shouldJoinRegion(region: TextRegion, line: TextLine): boolean {
@@ -189,6 +204,23 @@ function shouldJoinRegion(region: TextRegion, line: TextLine): boolean {
   if (leftAligned || rightAligned) return true;
   if (enclosedByRegion && gap <= Math.max(avgHeight, line.h) * 1.15) return true;
   return false;
+}
+
+function regionJoinScore(region: TextRegion, line: TextLine): number {
+  if (!shouldJoinRegion(region, line)) return Number.NEGATIVE_INFINITY;
+  const prev = region.lines[region.lines.length - 1]!;
+  const verticalGap = Math.max(0, line.y - (prev.y + prev.h));
+  const overlapWithPrev = Math.max(0, horizontalOverlap(prev.x, prev.right, line.x, line.right));
+  const overlapWithRegion = Math.max(0, horizontalOverlap(region.x, region.right, line.x, line.right));
+  const edgeDelta = Math.min(
+    Math.abs(line.x - prev.x),
+    Math.abs(line.x - region.x),
+    Math.abs(line.right - prev.right),
+    Math.abs(line.right - region.right),
+  );
+  const widthExpansion = Math.max(0, region.x - line.x) + Math.max(0, line.right - region.right);
+
+  return overlapWithPrev * 3 + overlapWithRegion * 2 - verticalGap * 24 - edgeDelta - widthExpansion * 2;
 }
 
 function shouldStayInSameParagraph(prev: TextLine, next: TextLine): boolean {
@@ -227,7 +259,37 @@ function createTextLines(textElements: readonly TextElement[]): TextLine[] {
     else grouped.push([el]);
   }
 
-  return grouped.map((row) => createTextLine(row));
+  return grouped
+    .flatMap((row) => splitRowIntoTextLineGroups(row).map((group) => createTextLine(group)))
+    .sort((a, b) => a.y - b.y || a.x - b.x);
+}
+
+function splitRowIntoTextLineGroups(row: readonly TextElement[]): TextElement[][] {
+  const parts = [...row].sort((a, b) => a.x - b.x);
+  if (parts.length <= 1) return [parts];
+
+  const rowHeight = Math.max(...parts.map((part) => part.h));
+  const avgFontPx = average(parts.map((part) => part.style.fontSizePx || part.style.fontSize || 12));
+  const breakGap = Math.max(24, rowHeight * 2.2, avgFontPx * 2.6);
+
+  const out: TextElement[][] = [];
+  let current: TextElement[] = [parts[0]!];
+  let currentRight = parts[0]!.x + parts[0]!.w;
+
+  for (let i = 1; i < parts.length; i++) {
+    const part = parts[i]!;
+    const gap = part.x - currentRight;
+    if (gap > breakGap) {
+      out.push(current);
+      current = [part];
+    } else {
+      current.push(part);
+    }
+    currentRight = Math.max(currentRight, part.x + part.w);
+  }
+
+  out.push(current);
+  return out;
 }
 
 function createTextLine(row: TextElement[]): TextLine {

@@ -11,6 +11,20 @@ import {
   toHex,
 } from './pdf-design.helpers';
 
+export interface ExtractedTextRun {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  content: string;
+  fontFamily: string;
+  fontSize: number;
+  fontSizePx: number;
+  fontWeight: 'bold' | 'normal';
+  fontStyle: 'italic' | 'normal';
+  color: string;
+}
+
 export async function extractPage(page: PDFPageProxy, pageNum: number): Promise<PageData> {
   const SCALE = 1.5;
   const vp = page.getViewport({ scale: SCALE });
@@ -165,21 +179,7 @@ export async function extractPage(page: PDFPageProxy, pageNum: number): Promise<
     }
   }
 
-  type RawRun = {
-    x: number;
-    y: number;
-    w: number;
-    h: number;
-    content: string;
-    fontFamily: string;
-    fontSize: number;
-    fontSizePx: number;
-    fontWeight: 'bold' | 'normal';
-    fontStyle: 'italic' | 'normal';
-    color: string;
-  };
-
-  const rawRuns: RawRun[] = [];
+  const rawRuns: ExtractedTextRun[] = [];
   textContent.items.forEach((item) => {
     const ti = item as { str?: string; transform: number[]; width: number; fontName: string };
     if (!ti.str?.trim()) return;
@@ -207,48 +207,7 @@ export async function extractPage(page: PDFPageProxy, pageNum: number): Promise<
       color,
     });
   });
-
-  rawRuns.sort((a, b) => a.y - b.y || a.x - b.x);
-
-  const textElements: TextElement[] = [];
-  for (const run of rawRuns) {
-    const prev = textElements[textElements.length - 1];
-    const yTol = Math.max(run.fontSizePx * 0.35, 2.5);
-    const canMerge =
-      prev &&
-      Math.abs(prev.y - run.y) < yTol &&
-      prev.style.fontFamily === run.fontFamily &&
-      prev.style.fontSizePx === run.fontSizePx &&
-      prev.style.fontWeight === run.fontWeight &&
-      prev.style.fontStyle === run.fontStyle &&
-      prev.style.color === run.color;
-    if (canMerge) {
-      const gap = run.x - (prev.x + prev.w);
-      const sep = gap > run.fontSizePx * 0.2 ? ' ' : '';
-      prev.content += sep + run.content;
-      const right = Math.max(prev.x + prev.w, run.x + run.w);
-      prev.w = right - prev.x;
-      prev.h = Math.max(prev.h, run.h);
-    } else {
-      textElements.push({
-        id: `t_${pageNum}_${textElements.length}`,
-        type: 'text',
-        x: run.x,
-        y: run.y,
-        w: run.w,
-        h: run.h,
-        content: run.content,
-        style: {
-          fontFamily: run.fontFamily,
-          fontSize: run.fontSize,
-          fontSizePx: run.fontSizePx,
-          fontWeight: run.fontWeight,
-          fontStyle: run.fontStyle,
-          color: run.color,
-        },
-      });
-    }
-  }
+  const textElements = mergeAdjacentTextRuns(rawRuns, pageNum);
 
   const allEls = [...textElements, ...shapes, ...images].filter(
     (e) => e.x >= 0 && e.y >= 0 && e.x < W && e.y < H,
@@ -269,4 +228,57 @@ export async function extractPage(page: PDFPageProxy, pageNum: number): Promise<
     signature: layoutSignature(allEls, W, H),
     templateId: null,
   };
+}
+
+const RUN_MERGE_GAP_FACTOR = 1.35;
+const RUN_MERGE_GAP_MIN_PX = 18;
+
+export function mergeAdjacentTextRuns(rawRuns: readonly ExtractedTextRun[], pageNum = 0): TextElement[] {
+  const sorted = [...rawRuns].sort((a, b) => a.y - b.y || a.x - b.x);
+  const textElements: TextElement[] = [];
+
+  for (const run of sorted) {
+    const prev = textElements[textElements.length - 1];
+    const yTol = Math.max(run.fontSizePx * 0.35, 2.5);
+    const gap = prev ? run.x - (prev.x + prev.w) : Number.POSITIVE_INFINITY;
+    const mergeGap = Math.max(run.fontSizePx * RUN_MERGE_GAP_FACTOR, RUN_MERGE_GAP_MIN_PX);
+    const canMerge =
+      prev &&
+      Math.abs(prev.y - run.y) < yTol &&
+      gap <= mergeGap &&
+      prev.style.fontFamily === run.fontFamily &&
+      prev.style.fontSizePx === run.fontSizePx &&
+      prev.style.fontWeight === run.fontWeight &&
+      prev.style.fontStyle === run.fontStyle &&
+      prev.style.color === run.color;
+
+    if (canMerge) {
+      const sep = gap > run.fontSizePx * 0.2 ? ' ' : '';
+      prev.content += sep + run.content;
+      const right = Math.max(prev.x + prev.w, run.x + run.w);
+      prev.w = right - prev.x;
+      prev.h = Math.max(prev.h, run.h);
+      continue;
+    }
+
+    textElements.push({
+      id: `t_${pageNum}_${textElements.length}`,
+      type: 'text',
+      x: run.x,
+      y: run.y,
+      w: run.w,
+      h: run.h,
+      content: run.content,
+      style: {
+        fontFamily: run.fontFamily,
+        fontSize: run.fontSize,
+        fontSizePx: run.fontSizePx,
+        fontWeight: run.fontWeight,
+        fontStyle: run.fontStyle,
+        color: run.color,
+      },
+    });
+  }
+
+  return textElements;
 }

@@ -984,6 +984,18 @@
           <input type="number" min="80" max="2000" [value]="sel.w" (input)="patchUserTextWidth(sel, $event)"
             style="flex: 1; padding: 6px 8px; border-radius: 6px; border: 1px solid #d1d9e0; font-size: 12px" />
         </div>
+        <div style="display: flex; gap: 10px; margin-bottom: 10px; align-items: center">
+          <label style="font-size: 10px; color: #64748b; width: 44px">Font</label>
+          <select
+            [value]="sel.sourceStyle?.fontFamily || pdfTextStyle(sel)?.fontFamily || ''"
+            (change)="patchUserTextFontFamily(sel, $event)"
+            style="flex: 1; padding: 6px 8px; border-radius: 6px; border: 1px solid #d1d9e0; font-size: 12px; background: white"
+          >
+            @for (f of userTextFontChoices(sel); track f) {
+              <option [value]="f">{{ f }}</option>
+            }
+          </select>
+        </div>
         <div style="display: flex; gap: 10px; margin-bottom: 12px; align-items: center">
           <label style="font-size: 10px; color: #64748b; width: 44px">Height</label>
           <input type="number" min="60" max="2000" [value]="sel.h" (input)="patchUserTextHeight(sel, $event)"

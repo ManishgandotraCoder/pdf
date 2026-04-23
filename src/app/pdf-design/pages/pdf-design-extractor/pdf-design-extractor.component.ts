@@ -2058,6 +2058,7 @@ export class PdfDesignExtractorComponent {
     const w = Math.min(380, Math.max(200, pg.width * 0.5));
     const h = Math.min(280, Math.max(100, pg.height * 0.24));
     const { x, y } = this.computeCenteredPlacementRect(pg, w, h);
+    const defaultFont = this.tokens().fonts?.[0] || 'Helvetica';
     const block: UserTextElement = {
       id,
       type: 'userText',
@@ -2066,6 +2067,14 @@ export class PdfDesignExtractorComponent {
       w,
       h,
       html: '<p></p>',
+      sourceStyle: {
+        fontFamily: defaultFont,
+        fontSize: 12,
+        fontSizePx: 12,
+        fontWeight: 'normal',
+        fontStyle: 'normal',
+        color: '#0f172a',
+      },
       _userAdded: true,
     };
     this.addedRichTexts.update((prev) => ({
@@ -2385,6 +2394,33 @@ export class PdfDesignExtractorComponent {
     if (sel.type !== 'userText') return;
     this.editorMode.set('edit');
     this.patchUserTextBlock(sel, { h: this.clampNum(e, 60, 2000) });
+  }
+
+  userTextFontChoices(sel: SelElement): string[] {
+    if (sel.type !== 'userText') return this.tokens().fonts || [];
+    const base = this.tokens().fonts || [];
+    const cur = (sel.sourceStyle?.fontFamily || this.pdfTextStyle(sel)?.fontFamily || '').trim();
+    if (!cur) return base;
+    if (!base.some((f) => f.toLowerCase() === cur.toLowerCase())) return [cur, ...base];
+    return base;
+  }
+
+  patchUserTextFontFamily(sel: SelElement, e: Event): void {
+    if (sel.type !== 'userText') return;
+    const fontFamily = String((e.target as HTMLSelectElement).value || '').trim();
+    if (!fontFamily) return;
+    this.editorMode.set('edit');
+    const base =
+      sel.sourceStyle ??
+      this.pdfTextStyle(sel) ?? {
+        fontFamily: 'Helvetica',
+        fontSize: 12,
+        fontSizePx: 12,
+        fontWeight: 'normal',
+        fontStyle: 'normal',
+        color: '#0f172a',
+      };
+    this.patchUserTextBlock(sel, { sourceStyle: { ...base, fontFamily } });
   }
 
   removeUserTextInspector(sel: SelElement): void {
