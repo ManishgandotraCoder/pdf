@@ -51,7 +51,7 @@ import {
   drawImageFit,
   findImageAtPagePoint,
   findVideoAtPagePoint,
-  getImageOverlayBounds,
+  getImageDisplayBounds,
   imageFileFromDataTransfer,
   isLikelyImageFile,
   isLikelyVideoFile,
@@ -89,6 +89,11 @@ type PageLayoutEntry =
   templateUrl: './pdf-design-extractor.component.html',
 })
 export class PdfDesignExtractorComponent {
+  /**
+   * View-only hard lock.
+   * This project is being converted to a renderer-only experience (no editing / mutation).
+   */
+  private readonly VIEW_ONLY = true;
   private readonly destroyRef = inject(DestroyRef);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
@@ -790,6 +795,7 @@ export class PdfDesignExtractorComponent {
   }
 
   undo(): void {
+    if (this.VIEW_ONLY) return;
     if (this.historyStack.length === 0) return;
     this.isRestoring = true;
     const current: HistorySnapshot = {
@@ -818,6 +824,7 @@ export class PdfDesignExtractorComponent {
   }
 
   redo(): void {
+    if (this.VIEW_ONLY) return;
     if (this.redoStack.length === 0) return;
     this.isRestoring = true;
     const current: HistorySnapshot = {
@@ -1049,7 +1056,7 @@ export class PdfDesignExtractorComponent {
         activeAddTool: 'image' | 'video' | 'table' | 'userText' | null;
       }>;
 
-      // Structural page edits must be applied before we restore per-page overlays/edits.
+      // Structural page edits must be applied before we restore per-page state.
       const norm = this.normalizePageLayout(s.pageLayout, this.sourcePages().length);
       if (norm.ok && norm.layout.length) {
         this.pageLayout.set(norm.layout);
@@ -1148,6 +1155,7 @@ export class PdfDesignExtractorComponent {
   }
 
   async saveEdits(): Promise<void> {
+    if (this.VIEW_ONLY) return;
     if (!this.openedPdfId) {
       alert('Saved (local).');
       return;
@@ -1168,6 +1176,7 @@ export class PdfDesignExtractorComponent {
   }
 
   async addImageFromFile(file: File, centerX?: number, centerY?: number): Promise<void> {
+    if (this.VIEW_ONLY) return;
     if (!isLikelyImageFile(file)) return;
     const pg = this.pages()[this.selPage()];
     if (!pg) return;
@@ -1182,11 +1191,12 @@ export class PdfDesignExtractorComponent {
       ...prev,
       [pn]: [...(prev[pn] || []), { id, type: 'image', x, y, w, h, src, _userAdded: true }],
     }));
-    this.editorMode.set('edit');
+    this.editorMode.set('view');
     this.activeAddTool.set('image');
   }
 
   async addVideoFromFile(file: File, centerX?: number, centerY?: number): Promise<void> {
+    if (this.VIEW_ONLY) return;
     if (!isLikelyVideoFile(file)) return;
     const pg = this.pages()[this.selPage()];
     if (!pg) return;
@@ -1201,11 +1211,12 @@ export class PdfDesignExtractorComponent {
       ...prev,
       [pn]: [...(prev[pn] || []), { id, type: 'video', x, y, w, h, src, _userAdded: true }],
     }));
-    this.editorMode.set('edit');
+    this.editorMode.set('view');
     this.activeAddTool.set('video');
   }
 
   handleReplaceVideo(el: VideoElement, file: File): void {
+    if (this.VIEW_ONLY) return;
     if (!isLikelyVideoFile(file)) return;
     this.captureBeforeChange();
     const pg = this.pages()[this.selPage()];
@@ -1220,6 +1231,7 @@ export class PdfDesignExtractorComponent {
   }
 
   handleRemoveVideo(el: VideoElement): void {
+    if (this.VIEW_ONLY) return;
     const pg = this.pages()[this.selPage()];
     if (!pg) return;
     this.captureBeforeChange();
@@ -1233,6 +1245,7 @@ export class PdfDesignExtractorComponent {
   }
 
   addDynamicTable(): void {
+    if (this.VIEW_ONLY) return;
     const pg = this.pages()[this.selPage()];
     if (!pg) return;
     this.captureBeforeChange();
@@ -1259,7 +1272,7 @@ export class PdfDesignExtractorComponent {
       ...prev,
       [pn]: [...(prev[pn] || []), tbl],
     }));
-    this.editorMode.set('edit');
+    this.editorMode.set('view');
     this.activeAddTool.set('table');
     this.selEl.set(tbl);
   }
@@ -1345,8 +1358,10 @@ export class PdfDesignExtractorComponent {
   }
 
   setEditorMode(mode: 'edit' | 'view'): void {
-    this.editorMode.set(mode);
-    if (mode === 'view') this.selEl.set(null);
+    // View-only: ignore any attempt to enable editing.
+    void mode;
+    this.editorMode.set('view');
+    this.selEl.set(null);
   }
 
   isPdfDerivedUserText(block: UserTextElement): boolean {
@@ -1364,6 +1379,7 @@ export class PdfDesignExtractorComponent {
   }
 
   convertCurrentPagePdfTextToBlocks(): void {
+    if (this.VIEW_ONLY) return;
     const pg = this.pg();
     if (!pg) return;
     const drafts = this.pdfTextDraftsForPage(pg.pageNum);
@@ -1374,13 +1390,14 @@ export class PdfDesignExtractorComponent {
     this.captureBeforeChange();
     const blocks = this.insertPdfTextBlocks(pg.pageNum, drafts);
     if (!blocks.length) return;
-    this.editorMode.set('edit');
+    this.editorMode.set('view');
     this.activeAddTool.set('userText');
     this.selEl.set(blocks[0]!);
     this.placedTextUndoGate = blocks[0]!.id;
   }
 
   convertAllPagesPdfTextToBlocks(): void {
+    if (this.VIEW_ONLY) return;
     const pageDrafts = this.pages()
       .map((pg) => ({ pageNum: pg.pageNum, drafts: this.pdfTextDraftsForPage(pg.pageNum) }))
       .filter((row) => row.drafts.length > 0);
@@ -1400,7 +1417,7 @@ export class PdfDesignExtractorComponent {
     if (!firstBlock) return;
     const targetIdx = this.pages().findIndex((pg) => pg.pageNum === (firstBlock!.sourcePageNum ?? 1));
     if (targetIdx >= 0) this.selPage.set(targetIdx);
-    this.editorMode.set('edit');
+    this.editorMode.set('view');
     this.activeAddTool.set('userText');
     this.selEl.set(firstBlock);
     this.placedTextUndoGate = firstBlock.id;
@@ -1503,18 +1520,21 @@ export class PdfDesignExtractorComponent {
   }
 
   handleViewerDragOver(e: DragEvent): void {
+    if (this.VIEW_ONLY) return;
     if (!this.pages().length) return;
     e.preventDefault();
     e.dataTransfer!.dropEffect = 'copy';
   }
 
   handleViewerDragEnter(e: DragEvent): void {
+    if (this.VIEW_ONLY) return;
     if (!this.pages().length) return;
     e.preventDefault();
     this.viewerImageDropActive.set(true);
   }
 
   handleViewerDragLeave(e: DragEvent): void {
+    if (this.VIEW_ONLY) return;
     if (!e.currentTarget || !e.relatedTarget) {
       this.viewerImageDropActive.set(false);
       return;
@@ -1523,6 +1543,7 @@ export class PdfDesignExtractorComponent {
   }
 
   async handleViewerDrop(e: DragEvent): Promise<void> {
+    if (this.VIEW_ONLY) return;
     e.preventDefault();
     e.stopPropagation();
     this.viewerImageDropActive.set(false);
@@ -1536,7 +1557,7 @@ export class PdfDesignExtractorComponent {
 
     const toolKind = (e.dataTransfer?.getData('application/x-avyro-add-tool') || '').trim();
     if (toolKind === 'image' || toolKind === 'video') {
-      this.editorMode.set('edit');
+      this.editorMode.set('view');
       this.activeAddTool.set(toolKind);
       this.pendingAddToolDrop = { kind: toolKind, x, y };
       if (toolKind === 'image') this.clickAddImage();
@@ -1547,7 +1568,7 @@ export class PdfDesignExtractorComponent {
     let file = await imageFileFromDataTransfer(e.dataTransfer);
     if (!file) file = Array.from(e.dataTransfer?.files || []).find(isLikelyVideoFile) || null;
     if (!file) return;
-    this.editorMode.set('edit');
+    this.editorMode.set('view');
     if (isLikelyVideoFile(file)) {
       const vhit = findVideoAtPagePoint(pgLocal.pageNum, this.addedVideos(), x, y);
       if (vhit) this.handleReplaceVideo(vhit, file);
@@ -1624,7 +1645,7 @@ export class PdfDesignExtractorComponent {
       mediaKind = img._userAdded ? 'imageUser' : 'imagePdf';
     } else return;
 
-    const ob = this.overlayBounds(el);
+    const ob = this.elementDisplayBounds(el);
     const { x: px, y: py } = this.clientToPageCoords(e.clientX, e.clientY);
     const imgEl = el.type === 'image' ? (el as ImageElement) : null;
     this.imageDrag = {
@@ -1815,7 +1836,7 @@ export class PdfDesignExtractorComponent {
       const pg = this.pages()[this.selPage()];
       if (!pg) return;
       const pn = pg.pageNum;
-      const ob = this.overlayBounds(el);
+      const ob = this.elementDisplayBounds(el);
       const { x: px, y: py } = this.clientToPageCoords(e.clientX, e.clientY);
       this.imageDrag = {
         pointerId: e.pointerId,
@@ -1847,7 +1868,7 @@ export class PdfDesignExtractorComponent {
     const ed = this.imageEdits()[pn]?.[imgEl.id];
     if (ed?.removed) return;
     e.stopPropagation();
-    const ob = getImageOverlayBounds(imgEl, pn, this.imageEdits());
+    const ob = getImageDisplayBounds(imgEl, pn, this.imageEdits());
     const { x: px, y: py } = this.clientToPageCoords(e.clientX, e.clientY);
     this.imageDrag = {
       pointerId: e.pointerId,
@@ -2134,6 +2155,7 @@ export class PdfDesignExtractorComponent {
   }
 
   addRichTextBlock(): void {
+    if (this.VIEW_ONLY) return;
     const pg = this.pages()[this.selPage()];
     if (!pg) return;
     this.captureBeforeChange();
@@ -2165,7 +2187,7 @@ export class PdfDesignExtractorComponent {
       ...prev,
       [pn]: [...(prev[pn] || []), block],
     }));
-    this.editorMode.set('edit');
+    this.editorMode.set('view');
     this.activeAddTool.set('userText');
     this.placedTextUndoGate = id;
     this.selEl.set(block);
@@ -2184,6 +2206,7 @@ export class PdfDesignExtractorComponent {
 
   /** Clears text edits, layout overrides, image edits, and user-placed content on all pages. */
   clearAllCanvasEdits(): void {
+    if (this.VIEW_ONLY) return;
     if (
       !confirm(
         'Clear all edits on every page? This removes layout moves, image replacements, and placed images, videos, tables, and text blocks. Undo is available.',
@@ -2303,17 +2326,17 @@ export class PdfDesignExtractorComponent {
   }
 
   onPlacedVideoPointerDown(e: PointerEvent, v: VideoElement, readOnly: boolean): void {
+    if (this.VIEW_ONLY) return;
     if (readOnly) return;
     if (!this.shouldStartPlacementDragFromTarget(e.target)) return;
-    this.editorMode.set('edit');
     this.selEl.set(v);
     this.onImagePointerDown(e, v);
   }
 
   onPlacedTablePointerDown(e: PointerEvent, t: TableElement, readOnly: boolean): void {
+    if (this.VIEW_ONLY) return;
     if (readOnly) return;
     if (!this.shouldStartPlacementDragFromTarget(e.target)) return;
-    this.editorMode.set('edit');
     this.selEl.set(t);
     this.onImagePointerDown(e, t);
   }
@@ -2327,7 +2350,7 @@ export class PdfDesignExtractorComponent {
     const pg = this.pages().find((p) => p.pageNum === pn) ?? null;
     if (!pg) return { x: el.x, y: el.y, w: el.w, h: el.h };
     if (el.type === 'image') {
-      return getImageOverlayBounds(el as ImageElement, pn, this.imageEdits());
+      return getImageDisplayBounds(el as ImageElement, pn, this.imageEdits());
     }
     if (el.type === 'text') {
       const raw = pg.textElements.find((t) => t.id === el.id);
@@ -2366,10 +2389,10 @@ export class PdfDesignExtractorComponent {
     return out;
   }
 
-  overlayBounds(el: SelElement): { x: number; y: number; w: number; h: number } {
+  elementDisplayBounds(el: SelElement): { x: number; y: number; w: number; h: number } {
     const pg = this.pg();
     if (el.type === 'image' && pg) {
-      return getImageOverlayBounds(el as ImageElement, pg.pageNum, this.imageEdits());
+      return getImageDisplayBounds(el as ImageElement, pg.pageNum, this.imageEdits());
     }
     if (el.type === 'text' && pg) {
       const le = this.layoutEdits()[pg.pageNum]?.[el.id];
@@ -2426,6 +2449,7 @@ export class PdfDesignExtractorComponent {
   }
 
   private beginEditPdfText(el: TextElement): void {
+    if (this.VIEW_ONLY) return;
     const pg = this.pg();
     if (!pg) return;
     const pn = pg.pageNum;
@@ -2436,7 +2460,7 @@ export class PdfDesignExtractorComponent {
     const exact = this.exactPdfTextBlockForSourceIds(pn, draft.sourceTextIds);
     if (exact) {
       this.selEl.set(exact);
-      this.editorMode.set('edit');
+      this.editorMode.set('view');
       this.activeAddTool.set('userText');
       this.placedTextUndoGate = exact.id;
       return;
@@ -2446,7 +2470,7 @@ export class PdfDesignExtractorComponent {
     const [block] = this.insertPdfTextBlocks(pn, [draft]);
     if (!block) return;
     this.selEl.set(block);
-    this.editorMode.set('edit');
+    this.editorMode.set('view');
     this.activeAddTool.set('userText');
     this.placedTextUndoGate = block.id;
   }
@@ -2542,14 +2566,14 @@ export class PdfDesignExtractorComponent {
   }
 
   patchUserTextWidth(sel: SelElement, e: Event): void {
+    if (this.VIEW_ONLY) return;
     if (sel.type !== 'userText') return;
-    this.editorMode.set('edit');
     this.patchUserTextBlock(sel, { w: this.clampNum(e, 80, 2000) });
   }
 
   patchUserTextHeight(sel: SelElement, e: Event): void {
+    if (this.VIEW_ONLY) return;
     if (sel.type !== 'userText') return;
-    this.editorMode.set('edit');
     this.patchUserTextBlock(sel, { h: this.clampNum(e, 60, 2000) });
   }
 
@@ -2563,10 +2587,10 @@ export class PdfDesignExtractorComponent {
   }
 
   patchUserTextFontFamily(sel: SelElement, e: Event): void {
+    if (this.VIEW_ONLY) return;
     if (sel.type !== 'userText') return;
     const fontFamily = String((e.target as HTMLSelectElement).value || '').trim();
     if (!fontFamily) return;
-    this.editorMode.set('edit');
     const base =
       sel.sourceStyle ??
       this.pdfTextStyle(sel) ?? {
@@ -2586,14 +2610,14 @@ export class PdfDesignExtractorComponent {
   }
 
   patchTableRowsFromInspector(sel: SelElement, e: Event): void {
+    if (this.VIEW_ONLY) return;
     if (sel.type !== 'table') return;
-    this.editorMode.set('edit');
     this.patchTable(sel, { rows: this.clampInt(e, 1, 30) });
   }
 
   patchTableColsFromInspector(sel: SelElement, e: Event): void {
+    if (this.VIEW_ONLY) return;
     if (sel.type !== 'table') return;
-    this.editorMode.set('edit');
     this.patchTable(sel, { cols: this.clampInt(e, 1, 30) });
   }
 
@@ -3283,7 +3307,7 @@ export class PdfDesignExtractorComponent {
     const origEl = e.pgData?.textElements.find((te) => te.id === e.elId);
     this.selPage.set(idx);
     if (origEl) this.selEl.set(origEl);
-    this.editorMode.set('edit');
+    this.editorMode.set('view');
   }
 
   clickById(id: string): void {

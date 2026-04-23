@@ -337,8 +337,8 @@ export function drawImageFit(
   });
 }
 
-/** Display rect for overlay / hit-test (PDF images may have x,y/w/h overrides in imageEdits). */
-export function getImageOverlayBounds(
+/** Display rect for hit-test (PDF images may have x,y/w/h overrides in imageEdits). */
+export function getImageDisplayBounds(
   el: ImageElement,
   pn: number,
   imageEdits: ImageEditsMap,
@@ -570,7 +570,7 @@ export function findImageAtPagePoint(
   const candidates: { el: ImageElement; area: number }[] = [];
   for (const el of pg.images) {
     if (pageEdits[el.id]?.removed) continue;
-    const b = getImageOverlayBounds(el, pn, imageEdits);
+    const b = getImageDisplayBounds(el, pn, imageEdits);
     if (!inRect(b.x, b.y, b.w, b.h)) continue;
     candidates.push({ el, area: Math.max(1, b.w) * Math.max(1, b.h) });
   }

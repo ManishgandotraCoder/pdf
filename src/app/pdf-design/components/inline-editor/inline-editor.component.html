@@ -1,53 +1,7 @@
 <div
-  data-rich-toolbar
-  #toolbarWrap
-  style="
-    position: absolute;
-    z-index: 50;
-    pointer-events: auto;
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 8px;
-    box-sizing: border-box;
-  "
-  [style.left.px]="toolbarLeft()"
-  [style.top.px]="toolbarTop()"
-  [style.width.px]="minMaxW()"
->
-  <app-rich-text-toolbar [disabled]="false" [fontChoices]="fontChoices()" />
-  <button
-    type="button"
-    title="Remove text from page"
-    aria-label="Remove text from page"
-    (click)="onResetEditsClick($event)"
-    style="
-      flex-shrink: 0;
-      width: 30px;
-      height: 30px;
-      padding: 0;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      border-radius: 6px;
-      border: 1px solid rgba(0, 0, 0, 0.1);
-      background: rgba(255, 255, 255, 0.98);
-      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
-      color: #64748b;
-      cursor: pointer;
-    "
-  >
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
-      <path d="M18 6L6 18M6 6l12 12" />
-    </svg>
-  </button>
-</div>
-<div
   #editable
   class="edit-textarea"
-  contenteditable="true"
-  (blur)="onBlur()"
-  (keydown)="onKeyDown($event)"
+  contenteditable="false"
   style="position: absolute; z-index: 49; outline: none"
   [style.left.px]="el().x - 1"
   [style.top.px]="el().y - 1"

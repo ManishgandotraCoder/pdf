@@ -57,7 +57,7 @@ export class RichTextEditorBlockComponent {
   /** Called on every keystroke — just track focus; do NOT emit to parent. */
   onInput(_e: Event): void {
     // Intentionally empty: we defer emitting until blur so that the canvas
-    // overlay does NOT update on every character the user types.
+    // The canvas does NOT update on every character the user types.
     // (Toolbar commands — bold, italic etc. — already restore the selection
     //  and modify the DOM directly; blur will capture their result too.)
   }

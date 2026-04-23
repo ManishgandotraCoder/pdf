@@ -264,7 +264,7 @@
       }
       <div style="flex: 1"></div>
       <div class="topbar__divider"></div>
-      @if (!previewMode()) {
+      @if (false) {
       <button type="button" title="Undo (⌘Z / Ctrl+Z)" aria-label="Undo" (click)="undo()" [disabled]="!canUndo()"
         style="width: 36px; height: 36px; padding: 0; display: flex; align-items: center; justify-content: center; border-radius: 8px"
         [style.background]="canUndo() ? 'rgba(42,172,184,0.14)' : '#f1f5f9'"
@@ -437,123 +437,7 @@
         </div>
         }
 
-        @for (im of pgv.images; track im.id) {
-        @if (!imageEdits()[pgv.pageNum]?.[im.id]?.removed) {
-        @let selected = selEl()?.id === im.id;
-        @let readOnly = editorMode() !== 'edit';
-        @let ob = overlayBounds(im);
-        <div
-          style="
-            position: absolute;
-            z-index: 2;
-            box-sizing: border-box;
-            pointer-events: auto;
-            background: transparent;
-          "
-          [style.left.px]="ob.x"
-          [style.top.px]="ob.y"
-          [style.width.px]="ob.w"
-          [style.height.px]="ob.h"
-          [style.outline]="selected && !readOnly ? '2px solid #2aacb8' : 'none'"
-          [style.cursor]="readOnly ? 'default' : (draggingImageId() === im.id ? 'grabbing' : 'grab')"
-          title="Image"
-          (pointerdown)="!readOnly ? onImagePointerDown($event, im) : null"
-          (pointermove)="onImagePointerMove($event)"
-          (pointerup)="onImagePointerUp($event)"
-          (pointercancel)="onImagePointerUp($event)"
-          (click)="$event.stopPropagation(); !readOnly ? selEl.set(im) : null"
-        >
-          @if (selected && !readOnly) {
-          @for (rh of resizeHandleList; track rh.id) {
-          <div
-            [style]="resizeHandleBoxStyle(rh)"
-            (pointerdown)="onResizeHandlePointerDown($event, im, rh.id)"
-            (pointermove)="onImagePointerMove($event)"
-            (pointerup)="onImagePointerUp($event)"
-            (pointercancel)="onImagePointerUp($event)"
-          ></div>
-          }
-          }
-        </div>
-        }
-        }
-
-        @for (uim of addedImages()[pgv.pageNum] || []; track uim.id) {
-        @let selected = selEl()?.id === uim.id;
-        @let readOnly = editorMode() !== 'edit';
-        @let ob = overlayBounds(uim);
-        <div
-          style="
-            position: absolute;
-            z-index: 2;
-            box-sizing: border-box;
-            pointer-events: auto;
-            background: transparent;
-          "
-          [style.left.px]="ob.x"
-          [style.top.px]="ob.y"
-          [style.width.px]="ob.w"
-          [style.height.px]="ob.h"
-          [style.outline]="selected && !readOnly ? '2px solid #2aacb8' : 'none'"
-          [style.cursor]="readOnly ? 'default' : (draggingImageId() === uim.id ? 'grabbing' : 'grab')"
-          title="Image"
-          (pointerdown)="!readOnly ? onImagePointerDown($event, uim) : null"
-          (pointermove)="onImagePointerMove($event)"
-          (pointerup)="onImagePointerUp($event)"
-          (pointercancel)="onImagePointerUp($event)"
-          (click)="$event.stopPropagation(); !readOnly ? selEl.set(uim) : null"
-        >
-          @if (selected && !readOnly) {
-          @for (rh of resizeHandleList; track rh.id) {
-          <div
-            [style]="resizeHandleBoxStyle(rh)"
-            (pointerdown)="onResizeHandlePointerDown($event, uim, rh.id)"
-            (pointermove)="onImagePointerMove($event)"
-            (pointerup)="onImagePointerUp($event)"
-            (pointercancel)="onImagePointerUp($event)"
-          ></div>
-          }
-          }
-        </div>
-        }
-
-        @for (txt of pgv.textElements; track txt.id) {
-        @if (!textEdits()[pgv.pageNum]?.[txt.id]?.maskOriginal) {
-        @let selected = selEl()?.id === txt.id;
-        @let ob = overlayBounds(txt);
-        <div style="
-                position: absolute;
-                z-index: 1;
-                border-radius: 2px;
-                box-sizing: border-box;
-                pointer-events: auto;
-                transition: background 0.12s ease, outline-color 0.12s ease;
-              "
-          [style.left.px]="ob.x" [style.top.px]="ob.y" [style.width.px]="ob.w" [style.height.px]="ob.h"
-          [style.outline]="selected ? '2px solid #2aacb8' : '1px dashed transparent'"
-          [style.cursor]="editorMode() === 'edit' ? 'text' : 'default'"
-          [style.background]="selected ? 'rgba(42, 172, 184, 0.1)' : 'transparent'"
-          [attr.title]="editorMode() === 'edit'
-            ? 'Double-click to convert this PDF text into an editable block'
-            : 'Switch to Edit to unlock PDF text'"
-          (click)="onOverlayClick($event, txt, editorMode() === 'edit', selected)"
-          (dblclick)="onOverlayDblClick($event, txt)"
-          (pointerdown)="onPlacementPointerDown($event, txt, editorMode() === 'edit')"
-          (pointermove)="onPointerMoveMaybe($event, editorMode() === 'edit')"
-          (pointerup)="onPointerUpMaybe($event, editorMode() === 'edit')"
-          (pointercancel)="onPointerUpMaybe($event, editorMode() === 'edit')"
-          (mouseenter)="onOverlayEnter($event, selected, 'rgba(42, 172, 184, 0.08)')"
-          (mouseleave)="onOverlayLeave($event, selected)">
-          @if (selected && editorMode() === 'edit') {
-          @for (rh of resizeHandleList; track rh.id) {
-          <div [style]="resizeHandleBoxStyle(rh)" (pointerdown)="onResizeHandlePointerDown($event, txt, rh.id)"
-            (pointermove)="onImagePointerMove($event)" (pointerup)="onImagePointerUp($event)"
-            (pointercancel)="onImagePointerUp($event)"></div>
-          }
-          }
-        </div>
-        }
-        }
+        <!-- (Removed) image/text hit layers used for editing/selection -->
 
         @for (t of addedTables()[pgv.pageNum] || []; track t.id) {
         @let selected = selEl()?.id === t.id;
@@ -724,21 +608,6 @@
       <div class="inspector__section-title">Workspace</div>
       <div
         style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; padding:6px; background:#f9fafb; border-radius:10px">
-        <!-- EDIT -->
-        <div class="tooltip-wrapper">
-          <button type="button" title="Edit — select and change PDF content"
-            (click)="setEditorMode('edit')" class="inspector-icon-btn"
-            style="width:40px; height:40px; display:flex; align-items:center; justify-content:center; border-radius:8px; transition:all 0.2s cubic-bezier(0.4,0,0.2,1); background:#fff; box-shadow:0 1px 2px rgba(0,0,0,0.08)"
-            [style.border]="'1px solid ' + (editorMode() === 'edit' ? '#1976d2' : 'rgba(0,0,0,0.12)')"
-            [style.color]="editorMode() === 'edit' ? '#1976d2' : '#0f766e'" [style.cursor]="'pointer'">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-              <path d="M12 20h9" />
-              <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
-            </svg>
-          </button>
-          <span class="tooltip-text">Edit</span>
-        </div>
-
         <!-- VIEW -->
         <div class="tooltip-wrapper">
           <button type="button" title="View — read without selection outlines"
@@ -809,11 +678,10 @@
     </div>
     }
 
-    @if (inspectorTab() === 'elements') {
+    @if (false) {
     <div class="inspector__block">
       <div class="inspector__section-title">Add to page</div>
-      <div
-        style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; padding:6px; background:#f9fafb; border-radius:10px">
+      <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; padding:6px; background:#f9fafb; border-radius:10px">
 
         <!-- IMAGE -->
         <div class="tooltip-wrapper">
@@ -897,45 +765,6 @@
 
       </div>
 
-    </div>
-
-    <div class="inspector__block">
-      <div class="inspector__section-title">PDF Text</div>
-      <p class="inspector__hint" style="margin-bottom: 10px">
-        Convert extracted PDF text into editable rich-text blocks while keeping the sampled font, size, and position.
-      </p>
-      <div style="display: flex; flex-direction: column; gap: 8px">
-        <button type="button" (click)="convertCurrentPagePdfTextToBlocks()" [disabled]="!hasConvertiblePdfTextOnCurrentPage()"
-          style="
-                width: 100%;
-                padding: 9px 10px;
-                background: rgba(42, 172, 184, 0.12);
-                color: #0f766e;
-                border: 1px solid rgba(42, 172, 184, 0.35);
-                border-radius: 6px;
-                font-size: 11px;
-                font-weight: 700;
-                cursor: pointer;
-              " [style.opacity]="hasConvertiblePdfTextOnCurrentPage() ? 1 : 0.45"
-          [style.cursor]="hasConvertiblePdfTextOnCurrentPage() ? 'pointer' : 'not-allowed'">
-          Unlock current page text
-        </button>
-        <button type="button" (click)="convertAllPagesPdfTextToBlocks()" [disabled]="!hasConvertiblePdfText()"
-          style="
-                width: 100%;
-                padding: 9px 10px;
-                background: #eff6ff;
-                color: #1d4ed8;
-                border: 1px solid rgba(29, 78, 216, 0.2);
-                border-radius: 6px;
-                font-size: 11px;
-                font-weight: 700;
-                cursor: pointer;
-              " [style.opacity]="hasConvertiblePdfText() ? 1 : 0.45"
-          [style.cursor]="hasConvertiblePdfText() ? 'pointer' : 'not-allowed'">
-          Unlock entire PDF text
-        </button>
-      </div>
     </div>
 
     }

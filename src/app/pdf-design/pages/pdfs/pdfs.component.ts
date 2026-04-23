@@ -273,7 +273,7 @@ import { PdfsApiService, type PdfRecord } from '../../services/pdfs-api.service'
       display: flex; gap: 8px; padding: 0 16px; flex-shrink: 0;
     }
 
-    /* Upload progress overlay */
+    /* Upload progress modal */
     .uploading-indicator {
       display: flex; align-items: center; gap: 10px;
       padding: 14px 20px; border-radius: 12px;

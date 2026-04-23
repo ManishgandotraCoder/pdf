@@ -20,7 +20,7 @@ export class InlineEditorComponent implements AfterViewInit {
 
   readonly save = output<string>();
   readonly cancel = output<void>();
-  /** Remove PDF text from the page (empty edit + cover overlay — same as canvas ×). */
+  /** Remove PDF text from the page (empty edit + cover fill — same as canvas ×). */
   readonly resetEdits = output<void>();
 
   private readonly toolbarWrap = viewChild<ElementRef<HTMLElement>>('toolbarWrap');

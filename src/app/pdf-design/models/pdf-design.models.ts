@@ -113,7 +113,7 @@ export type ImageEditsMap = Record<
   Record<string, { removed?: boolean; src?: string; x?: number; y?: number; w?: number; h?: number }>
 >;
 
-/** PDF text box geometry overrides (undo-friendly; merged in overlay). */
+/** PDF text box geometry overrides (undo-friendly; merged during render). */
 export type LayoutEditsMap = Record<
   number,
   Record<string, { x?: number; y?: number; w?: number; h?: number }>
@@ -125,7 +125,7 @@ export type TextEditsMap = Record<
   Record<
     string,
     {
-      /** HTML rendered in the overlay editor. */
+      /** HTML rendered in the editor surface. */
       html: string;
       /** When true, the original PDF text is visually masked. */
       maskOriginal?: boolean;

@@ -76,7 +76,7 @@ describe('mergeAdjacentTextRuns', () => {
 });
 
 describe('createPdfRichTextBlocks', () => {
-  it('keeps the project-team page split into local text blocks instead of one giant overlay', () => {
+  it('keeps the project-team page split into local text blocks instead of one giant block', () => {
     const textElements = mergeAdjacentTextRuns([
       makeRun('Siddharth Boruah', 460, 160, 270, 34, TITLE_STYLE),
       makeRun('Relevant Projects', 1020, 160, 230, 34, TITLE_STYLE),

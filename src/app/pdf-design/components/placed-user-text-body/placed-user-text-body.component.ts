@@ -16,7 +16,8 @@ import {
 })
 export class PlacedUserTextBodyComponent {
   readonly html = input<string>('');
-  readonly readOnly = input(false);
+  // View-only: always render as non-editable surface.
+  readonly readOnly = input(true);
 
   readonly htmlChange = output<string>();
   readonly focusFirstEdit = output<void>();
@@ -37,7 +38,7 @@ export class PlacedUserTextBodyComponent {
       if (!el) return;
       const html = this.normalizeEditableHtml(this.html());
       if (!this.focused && el.innerHTML !== html) el.innerHTML = html;
-      el.setAttribute('contenteditable', this.readOnly() ? 'false' : 'true');
+      el.setAttribute('contenteditable', 'false');
     });
 
     if (typeof document !== 'undefined') {
@@ -48,22 +49,17 @@ export class PlacedUserTextBodyComponent {
   }
 
   onInput(e: Event): void {
-    if (this.readOnly()) return;
-    this.htmlChange.emit((e.target as HTMLDivElement).innerHTML);
-    this.emitSelectionState();
+    void e;
   }
 
   onFocus(): void {
-    if (this.readOnly()) return;
-    this.focused = true;
-    this.focusFirstEdit.emit();
-    this.focusStateChange.emit(true);
-    this.emitSelectionState();
+    // Keep focus state signals false for view-only rendering.
+    this.focused = false;
   }
 
   onBlur(e: Event): void {
     this.focused = false;
-    if (!this.readOnly()) this.htmlChange.emit((e.target as HTMLDivElement).innerHTML);
+    void e;
     queueMicrotask(() => {
       this.focusStateChange.emit(this.isSelectionInsideEditable());
       this.emitSelectionState();
@@ -71,12 +67,7 @@ export class PlacedUserTextBodyComponent {
   }
 
   onPointerDown(e: PointerEvent): void {
-    if (this.readOnly()) return;
-    if (e.altKey) {
-      this.altDragPointerDown.emit(e);
-      return;
-    }
-    this.maybePlaceCaretOnClickedEmptyLine(e);
+    void e;
   }
 
   onPointerMove(e: PointerEvent): void {
