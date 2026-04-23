@@ -75,6 +75,12 @@ export interface UserTextElement {
   w: number;
   h: number;
   html: string;
+  /** When present, this block was derived from extracted PDF text. */
+  sourcePageNum?: number;
+  /** Original extracted PDF text elements covered by this block. */
+  sourceTextIds?: string[];
+  /** Base typography sampled from the PDF so the block can keep the same look. */
+  sourceStyle?: TextStyle;
   _userAdded?: boolean;
 }
 

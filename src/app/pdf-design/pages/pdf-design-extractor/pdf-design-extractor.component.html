@@ -412,7 +412,43 @@
         </div>
         }
 
-        <!-- overlays removed (view-only rendering) -->
+        @for (txt of pgv.textElements; track txt.id) {
+        @if (!textEdits()[pgv.pageNum]?.[txt.id]?.maskOriginal) {
+        @let selected = selEl()?.id === txt.id;
+        @let ob = overlayBounds(txt);
+        <div style="
+                position: absolute;
+                z-index: 1;
+                border-radius: 2px;
+                box-sizing: border-box;
+                pointer-events: auto;
+                transition: background 0.12s ease, outline-color 0.12s ease;
+              "
+          [style.left.px]="ob.x" [style.top.px]="ob.y" [style.width.px]="ob.w" [style.height.px]="ob.h"
+          [style.outline]="selected ? '2px solid #2aacb8' : '1px dashed transparent'"
+          [style.cursor]="editorMode() === 'edit' ? 'text' : 'default'"
+          [style.background]="selected ? 'rgba(42, 172, 184, 0.1)' : 'transparent'"
+          [attr.title]="editorMode() === 'edit'
+            ? 'Double-click to convert this PDF text into an editable block'
+            : 'Switch to Edit to unlock PDF text'"
+          (click)="onOverlayClick($event, txt, editorMode() === 'edit', selected)"
+          (dblclick)="onOverlayDblClick($event, txt)"
+          (pointerdown)="onPlacementPointerDown($event, txt, editorMode() === 'edit')"
+          (pointermove)="onPointerMoveMaybe($event, editorMode() === 'edit')"
+          (pointerup)="onPointerUpMaybe($event, editorMode() === 'edit')"
+          (pointercancel)="onPointerUpMaybe($event, editorMode() === 'edit')"
+          (mouseenter)="onOverlayEnter($event, selected, 'rgba(42, 172, 184, 0.08)')"
+          (mouseleave)="onOverlayLeave($event, selected)">
+          @if (selected && editorMode() === 'edit') {
+          @for (rh of resizeHandleList; track rh.id) {
+          <div [style]="resizeHandleBoxStyle(rh)" (pointerdown)="onResizeHandlePointerDown($event, txt, rh.id)"
+            (pointermove)="onImagePointerMove($event)" (pointerup)="onImagePointerUp($event)"
+            (pointercancel)="onImagePointerUp($event)"></div>
+          }
+          }
+        </div>
+        }
+        }
 
         @for (t of addedTables()[pgv.pageNum] || []; track t.id) {
         @let selected = selEl()?.id === t.id;
@@ -461,13 +497,13 @@
 
         @for (rt of addedRichTexts()[pgv.pageNum] || []; track rt.id) {
         @let selected = selEl()?.id === rt.id;
-        @let readOnly = editorMode() !== 'edit';
-        @let isPdfText = rt.id.startsWith('pdftext_');
+        @let readOnly = editorMode() !== 'edit' || !selected;
+        @let isPdfText = isPdfDerivedUserText(rt);
         @let sty = isPdfText ? pdfTextStyle(rt) : null;
-        @let showChrome = selected && !readOnly && (!!userTextHasSelection()[rt.id] || !!userTextHasFocus()[rt.id]);
-        @let sideSlotPx = 0;
-        @let showLeftDrag = !readOnly;
-        @let showRightClose = !readOnly;
+        @let showChrome = selected && editorMode() === 'edit';
+        @let sideSlotPx = showChrome ? 28 : 0;
+        @let showLeftDrag = showChrome;
+        @let showRightClose = showChrome;
         @let leftColPx = showLeftDrag ? sideSlotPx : 0;
         @let rightColPx = showRightClose ? sideSlotPx : 0;
         <div style="
@@ -525,7 +561,12 @@
               [style.color]="sty?.color || null"
             >
               <div style="flex: 1; min-width: 0; display: flex; justify-content: flex-start">
-                <app-placed-user-text-body [html]="rt.html" [readOnly]="true" />
+                <app-placed-user-text-body [html]="rt.html" [readOnly]="readOnly"
+                  (htmlChange)="updateUserTextHtml(rt.id, $event)"
+                  (focusFirstEdit)="onPlacedUserTextFocus(rt.id)"
+                  (selectionStateChange)="setUserTextSelection(rt.id, $event)"
+                  (focusStateChange)="setUserTextFocus(rt.id, $event)"
+                  (altDragPointerDown)="onAltDragUserText($event, rt)" />
               </div>
             </div>
 
@@ -646,10 +687,25 @@
       <div class="inspector__section-title">Workspace</div>
       <div
         style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; padding:6px; background:#f9fafb; border-radius:10px">
+        <!-- EDIT -->
+        <div class="tooltip-wrapper">
+          <button type="button" title="Edit — select and change PDF content"
+            (click)="setEditorMode('edit')" class="inspector-icon-btn"
+            style="width:40px; height:40px; display:flex; align-items:center; justify-content:center; border-radius:8px; transition:all 0.2s cubic-bezier(0.4,0,0.2,1); background:#fff; box-shadow:0 1px 2px rgba(0,0,0,0.08)"
+            [style.border]="'1px solid ' + (editorMode() === 'edit' ? '#1976d2' : 'rgba(0,0,0,0.12)')"
+            [style.color]="editorMode() === 'edit' ? '#1976d2' : '#0f766e'" [style.cursor]="'pointer'">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+              <path d="M12 20h9" />
+              <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
+            </svg>
+          </button>
+          <span class="tooltip-text">Edit</span>
+        </div>
+
         <!-- VIEW -->
         <div class="tooltip-wrapper">
           <button type="button" title="View — read without selection outlines"
-            (click)="editorMode.set('view'); selEl.set(null)" class="inspector-icon-btn"
+            (click)="setEditorMode('view')" class="inspector-icon-btn"
             style="width:40px; height:40px; display:flex; align-items:center; justify-content:center; border-radius:8px; transition:all 0.2s cubic-bezier(0.4,0,0.2,1); background:#fff; box-shadow:0 1px 2px rgba(0,0,0,0.08)"
             [style.border]="'1px solid ' + (editorMode() === 'view' ? '#1976d2' : 'rgba(0,0,0,0.12)')"
             [style.color]="editorMode() === 'view' ? '#1976d2' : '#4338ca'" [style.cursor]="'pointer'">
@@ -660,8 +716,6 @@
           </button>
           <span class="tooltip-text">View</span>
         </div>
-
-        <!-- Edit mode removed -->
 
         <!-- ADD PAGE -->
         <div class="tooltip-wrapper">
@@ -804,6 +858,45 @@
 
     </div>
 
+    <div class="inspector__block">
+      <div class="inspector__section-title">PDF Text</div>
+      <p class="inspector__hint" style="margin-bottom: 10px">
+        Convert extracted PDF text into editable rich-text blocks while keeping the sampled font, size, and position.
+      </p>
+      <div style="display: flex; flex-direction: column; gap: 8px">
+        <button type="button" (click)="convertCurrentPagePdfTextToBlocks()" [disabled]="!hasConvertiblePdfTextOnCurrentPage()"
+          style="
+                width: 100%;
+                padding: 9px 10px;
+                background: rgba(42, 172, 184, 0.12);
+                color: #0f766e;
+                border: 1px solid rgba(42, 172, 184, 0.35);
+                border-radius: 6px;
+                font-size: 11px;
+                font-weight: 700;
+                cursor: pointer;
+              " [style.opacity]="hasConvertiblePdfTextOnCurrentPage() ? 1 : 0.45"
+          [style.cursor]="hasConvertiblePdfTextOnCurrentPage() ? 'pointer' : 'not-allowed'">
+          Unlock current page text
+        </button>
+        <button type="button" (click)="convertAllPagesPdfTextToBlocks()" [disabled]="!hasConvertiblePdfText()"
+          style="
+                width: 100%;
+                padding: 9px 10px;
+                background: #eff6ff;
+                color: #1d4ed8;
+                border: 1px solid rgba(29, 78, 216, 0.2);
+                border-radius: 6px;
+                font-size: 11px;
+                font-weight: 700;
+                cursor: pointer;
+              " [style.opacity]="hasConvertiblePdfText() ? 1 : 0.45"
+          [style.cursor]="hasConvertiblePdfText() ? 'pointer' : 'not-allowed'">
+          Unlock entire PDF text
+        </button>
+      </div>
+    </div>
+
     }
 
     @if (selEl(); as sel) {
@@ -839,9 +932,83 @@
                   margin-bottom: 8px;
                   padding-bottom: 5px;
                   border-bottom: 1px solid #e8ecf0;
-                ">
+        ">
           Text
         </div>
+        <p style="font-size: 10px; color: #64748b; line-height: 1.5">
+          Double-click the highlighted text area on the page to turn it into an editable rich-text block, or use the
+          PDF Text tools above to unlock the whole page.
+        </p>
+      </div>
+      }
+
+      @if (sel.type === 'userText') {
+      <div style="margin-bottom: 18px">
+        <div style="
+                  font-size: 9px;
+                  color: #64748b;
+                  letter-spacing: 1.5px;
+                  text-transform: uppercase;
+                  font-weight: 700;
+                  margin-bottom: 8px;
+                  padding-bottom: 5px;
+                  border-bottom: 1px solid #e8ecf0;
+                ">
+          {{ isPdfDerivedUserText(sel) ? 'PDF text block' : 'Rich text block' }}
+        </div>
+        @if (editorMode() === 'edit') {
+        <div style="margin-bottom: 10px">
+          <app-rich-text-toolbar [disabled]="false" [fontChoices]="tokens().fonts" />
+        </div>
+        }
+        <p style="font-size: 10px; color: #64748b; margin-bottom: 10px; line-height: 1.5">
+          Click inside the block on the page, then use the toolbar for paragraphs, bullet lists, numbered lists,
+          links, alignment, and typography.
+        </p>
+        @if (isPdfDerivedUserText(sel)) {
+        <div style="
+                  margin-bottom: 10px;
+                  padding: 8px 10px;
+                  border-radius: 8px;
+                  background: rgba(42, 172, 184, 0.08);
+                  border: 1px solid rgba(42, 172, 184, 0.18);
+                  font-size: 10px;
+                  color: #0f766e;
+                  line-height: 1.5;
+                ">
+          This block is linked to the original PDF text and keeps that text masked while you edit.
+        </div>
+        }
+        <div style="display: flex; gap: 10px; margin-bottom: 10px; align-items: center">
+          <label style="font-size: 10px; color: #64748b; width: 44px">Width</label>
+          <input type="number" min="80" max="2000" [value]="sel.w" (input)="patchUserTextWidth(sel, $event)"
+            style="flex: 1; padding: 6px 8px; border-radius: 6px; border: 1px solid #d1d9e0; font-size: 12px" />
+        </div>
+        <div style="display: flex; gap: 10px; margin-bottom: 12px; align-items: center">
+          <label style="font-size: 10px; color: #64748b; width: 44px">Height</label>
+          <input type="number" min="60" max="2000" [value]="sel.h" (input)="patchUserTextHeight(sel, $event)"
+            style="flex: 1; padding: 6px 8px; border-radius: 6px; border: 1px solid #d1d9e0; font-size: 12px" />
+        </div>
+        <button type="button" (click)="removeUserTextInspector(sel)" style="
+                  width: 100%;
+                  padding: 8px 10px;
+                  background: #fef2f2;
+                  color: #b91c1c;
+                  border: 1px solid #fecaca;
+                  border-radius: 6px;
+                  font-size: 11px;
+                  cursor: pointer;
+                  display: flex;
+                  align-items: center;
+                  justify-content: center;
+                  gap: 8px;
+                ">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" aria-hidden="true">
+            <path d="M18 6L6 18M6 6l12 12" />
+          </svg>
+          Remove block
+        </button>
       </div>
       }
 

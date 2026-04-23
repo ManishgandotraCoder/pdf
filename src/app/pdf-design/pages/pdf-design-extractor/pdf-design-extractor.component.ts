@@ -62,6 +62,7 @@ import {
   remapPageKeyedStateInsert,
 } from '../../utils/pdf-design.helpers';
 import { extractPage } from '../../utils/pdf-extract-page';
+import { createPdfRichTextBlocks, type PdfRichTextBlockDraft } from '../../utils/pdf-rich-text-blocks';
 import { PROPOSAL_SECTION_CATALOG } from '../../utils/proposal-sections.catalog';
 import { ensureTableCells, isProbablyHtml } from '../../utils/rich-text.utils';
 import { PdfsApiService } from '../../services/pdfs-api.service';
@@ -1229,6 +1230,68 @@ export class PdfDesignExtractorComponent {
     });
   }
 
+  setEditorMode(mode: 'edit' | 'view'): void {
+    this.editorMode.set(mode);
+    if (mode === 'view') this.selEl.set(null);
+  }
+
+  isPdfDerivedUserText(block: UserTextElement): boolean {
+    return this.userTextSourceIds(block).length > 0;
+  }
+
+  hasConvertiblePdfTextOnCurrentPage(): boolean {
+    const pg = this.pg();
+    if (!pg) return false;
+    return this.hasPendingPdfTextBlocksForPage(pg.pageNum);
+  }
+
+  hasConvertiblePdfText(): boolean {
+    return this.pages().some((pg) => this.hasPendingPdfTextBlocksForPage(pg.pageNum));
+  }
+
+  convertCurrentPagePdfTextToBlocks(): void {
+    const pg = this.pg();
+    if (!pg) return;
+    const drafts = this.pdfTextDraftsForPage(pg.pageNum);
+    if (!drafts.length) {
+      alert('No PDF text blocks were found on this page.');
+      return;
+    }
+    this.captureBeforeChange();
+    const blocks = this.insertPdfTextBlocks(pg.pageNum, drafts);
+    if (!blocks.length) return;
+    this.editorMode.set('edit');
+    this.activeAddTool.set('userText');
+    this.selEl.set(blocks[0]!);
+    this.placedTextUndoGate = blocks[0]!.id;
+  }
+
+  convertAllPagesPdfTextToBlocks(): void {
+    const pageDrafts = this.pages()
+      .map((pg) => ({ pageNum: pg.pageNum, drafts: this.pdfTextDraftsForPage(pg.pageNum) }))
+      .filter((row) => row.drafts.length > 0);
+
+    if (!pageDrafts.length) {
+      alert('No PDF text blocks were found to unlock.');
+      return;
+    }
+
+    this.captureBeforeChange();
+    let firstBlock: UserTextElement | null = null;
+    for (const row of pageDrafts) {
+      const blocks = this.insertPdfTextBlocks(row.pageNum, row.drafts);
+      if (!firstBlock && blocks.length) firstBlock = blocks[0]!;
+    }
+
+    if (!firstBlock) return;
+    const targetIdx = this.pages().findIndex((pg) => pg.pageNum === (firstBlock!.sourcePageNum ?? 1));
+    if (targetIdx >= 0) this.selPage.set(targetIdx);
+    this.editorMode.set('edit');
+    this.activeAddTool.set('userText');
+    this.selEl.set(firstBlock);
+    this.placedTextUndoGate = firstBlock.id;
+  }
+
   onUserTextDragHandlePointerDown(e: PointerEvent, rt: UserTextElement, enabled: boolean): void {
     if (!enabled) return;
     e.stopPropagation();
@@ -1255,22 +1318,12 @@ export class PdfDesignExtractorComponent {
     const pg = this.pages()[this.selPage()];
     if (!pg) return;
     const pn = pg.pageNum;
+    const block = ((this.addedRichTexts()[pn] || []) as UserTextElement[]).find((b) => b.id === id) || null;
     this.addedRichTexts.update((prev) => ({
       ...prev,
       [pn]: ((prev[pn] || []) as UserTextElement[]).map((b) => (b.id === id ? { ...b, html: innerHtml } : b)),
     }));
-    const m = id.match(/^pdftext_(\d+)_(.+)$/);
-    if (m) {
-      const tPn = Number.parseInt(m[1]!, 10);
-      const textId = m[2]!;
-      this.textEdits.update((prev) => ({
-        ...prev,
-        [tPn]: {
-          ...(prev[tPn] || {}),
-          [textId]: { html: innerHtml, maskOriginal: true },
-        },
-      }));
-    }
+    if (block) this.applyMaskToSourceTextIds(pn, this.userTextSourceIds(block));
     this.selEl.update((prev) =>
       prev?.id === id && prev?.type === 'userText' ? { ...prev, html: innerHtml } : prev,
     );
@@ -1297,6 +1350,7 @@ export class PdfDesignExtractorComponent {
     if (!pg) return;
     this.captureBeforeChange();
     const pn = pg.pageNum;
+    this.clearMaskForSourceTextIds(pn, this.userTextSourceIds(el), el.id);
     this.addedRichTexts.update((prev) => ({
       ...prev,
       [pn]: ((prev[pn] || []) as UserTextElement[]).filter((b) => b.id !== el.id),
@@ -1945,10 +1999,10 @@ export class PdfDesignExtractorComponent {
   }
 
   pdfTextStyle(rt: UserTextElement): TextStyle | null {
-    const m = rt.id.match(/^pdftext_(\d+)_(.+)$/);
-    if (!m) return null;
-    const pn = Number.parseInt(m[1]!, 10);
-    const textId = m[2]!;
+    if (rt.sourceStyle) return rt.sourceStyle;
+    const textId = this.userTextSourceIds(rt)[0];
+    const pn = rt.sourcePageNum ?? this.pg()?.pageNum ?? null;
+    if (!textId || pn == null) return null;
     const pg = this.pages().find((p) => p.pageNum === pn);
     const src = pg?.textElements.find((t) => t.id === textId);
     return src?.style ?? null;
@@ -2110,6 +2164,7 @@ export class PdfDesignExtractorComponent {
     for (const el of list) {
       if (el.id === excludeId) continue;
       if (el.type === 'image' && this.imageEdits()[pn]?.[el.id]?.removed) continue;
+      if (el.type === 'text' && this.textEdits()[pn]?.[el.id]?.maskOriginal) continue;
       out.push(this.elementPageBounds(el, pn));
     }
     return out;
@@ -2178,49 +2233,26 @@ export class PdfDesignExtractorComponent {
     const pg = this.pg();
     if (!pg) return;
     const pn = pg.pageNum;
-    const ob = this.overlayBounds(el);
+    const draft = this.pdfTextDraftsForPage(pn).find((item) => item.sourceTextIds.includes(el.id))
+      || createPdfRichTextBlocks([el])[0];
+    if (!draft) return;
 
-    const existing = this.textEdits()[pn]?.[el.id];
-    if (!existing) this.captureBeforeChange();
-    const html = existing?.html ?? `<p>${this.escapeHtml(el.content || '')}</p>`;
+    const exact = this.exactPdfTextBlockForSourceIds(pn, draft.sourceTextIds);
+    if (exact) {
+      this.selEl.set(exact);
+      this.editorMode.set('edit');
+      this.activeAddTool.set('userText');
+      this.placedTextUndoGate = exact.id;
+      return;
+    }
 
-    this.textEdits.update((prev) => ({
-      ...prev,
-      [pn]: {
-        ...(prev[pn] || {}),
-        [el.id]: { html, maskOriginal: true },
-      },
-    }));
-
-    // Represent edited PDF text as a userText block so we can reuse the rich-text editor UI.
-    const rtId = `pdftext_${pn}_${el.id}`;
-    // When double-clicking PDF text to edit, expand the editor to full available page width.
-    // (Use remaining width from the original x so we don't overflow the page.)
-    const fullWidth = Math.max(80, pg.width - ob.x);
-    const block: UserTextElement = {
-      id: rtId,
-      type: 'userText',
-      x: ob.x,
-      y: ob.y,
-      w: fullWidth,
-      h: ob.h,
-      html,
-      _userAdded: true,
-    };
-
-    this.addedRichTexts.update((prev) => {
-      const list = (prev[pn] || []) as UserTextElement[];
-      const found = list.find((x) => x.id === rtId);
-      return {
-        ...prev,
-        [pn]: found ? list.map((x) => (x.id === rtId ? { ...x, ...block } : x)) : [...list, block],
-      };
-    });
-
+    this.captureBeforeChange();
+    const [block] = this.insertPdfTextBlocks(pn, [draft]);
+    if (!block) return;
     this.selEl.set(block);
     this.editorMode.set('edit');
     this.activeAddTool.set('userText');
-    this.placedTextUndoGate = rtId;
+    this.placedTextUndoGate = block.id;
   }
 
   onOverlayEnter(e: MouseEvent, active: boolean, bgTint: string): void {
@@ -2542,6 +2574,154 @@ export class PdfDesignExtractorComponent {
       .replace(/"/g, '&quot;');
   }
 
+  private userTextSourceIds(block: UserTextElement): string[] {
+    const explicit = (block.sourceTextIds || []).map((id) => String(id || '').trim()).filter(Boolean);
+    if (explicit.length) return [...new Set(explicit)];
+    const legacy = block.id.match(/^pdftext_(\d+)_(.+)$/);
+    return legacy ? [legacy[2]!] : [];
+  }
+
+  private sourceIdSetsMatch(a: readonly string[], b: readonly string[]): boolean {
+    const aa = [...new Set(a.map((id) => String(id || '').trim()).filter(Boolean))].sort();
+    const bb = [...new Set(b.map((id) => String(id || '').trim()).filter(Boolean))].sort();
+    if (aa.length !== bb.length) return false;
+    return aa.every((id, idx) => id === bb[idx]);
+  }
+
+  private pdfTextDraftsForPage(pageNum: number): PdfRichTextBlockDraft[] {
+    const pg = this.pages().find((item) => item.pageNum === pageNum);
+    if (!pg) return [];
+    return createPdfRichTextBlocks(pg.textElements);
+  }
+
+  private exactPdfTextBlockForSourceIds(pageNum: number, sourceTextIds: readonly string[]): UserTextElement | null {
+    return (((this.addedRichTexts()[pageNum] || []) as UserTextElement[]).find((block) =>
+      this.isPdfDerivedUserText(block) && this.sourceIdSetsMatch(this.userTextSourceIds(block), sourceTextIds),
+    ) || null);
+  }
+
+  private hasPendingPdfTextBlocksForPage(pageNum: number): boolean {
+    return this.pdfTextDraftsForPage(pageNum).some((draft) => !this.exactPdfTextBlockForSourceIds(pageNum, draft.sourceTextIds));
+  }
+
+  private convertiblePdfTextElementsForPage(pageNum: number): TextElement[] {
+    const pg = this.pages().find((item) => item.pageNum === pageNum);
+    if (!pg) return [];
+    const covered = new Set(
+      ((this.addedRichTexts()[pageNum] || []) as UserTextElement[]).flatMap((block) => this.userTextSourceIds(block)),
+    );
+    return pg.textElements.filter((el) => !covered.has(el.id) && !this.textEdits()[pageNum]?.[el.id]?.maskOriginal);
+  }
+
+  private createPdfUserTextBlock(pageNum: number, draft: PdfRichTextBlockDraft, preferredId?: string): UserTextElement {
+    const sourceIds = [...new Set(draft.sourceTextIds)];
+    const id = preferredId || (
+      sourceIds.length === 1
+        ? `pdftext_${pageNum}_${sourceIds[0]}`
+        : `pdfblock_${pageNum}_${sourceIds.join('__')}`
+    );
+    return {
+      id,
+      type: 'userText',
+      x: draft.x,
+      y: draft.y,
+      w: Math.max(96, draft.w + 8),
+      h: Math.max(28, draft.h + 6),
+      html: draft.html,
+      sourcePageNum: pageNum,
+      sourceTextIds: sourceIds,
+      sourceStyle: draft.sourceStyle,
+      _userAdded: true,
+    };
+  }
+
+  private insertPdfTextBlocks(pageNum: number, drafts: readonly PdfRichTextBlockDraft[]): UserTextElement[] {
+    if (!drafts.length) return [];
+    const currentBlocks = (this.addedRichTexts()[pageNum] || []) as UserTextElement[];
+    const removals = new Set<string>();
+    const blocks: UserTextElement[] = [];
+
+    for (const draft of drafts) {
+      const exact = currentBlocks.find((block) =>
+        this.isPdfDerivedUserText(block) && this.sourceIdSetsMatch(this.userTextSourceIds(block), draft.sourceTextIds),
+      );
+      if (exact) {
+        blocks.push(exact);
+        continue;
+      }
+
+      const overlapping = currentBlocks.filter((block) =>
+        this.isPdfDerivedUserText(block) &&
+        this.userTextSourceIds(block).some((id) => draft.sourceTextIds.includes(id)),
+      );
+      overlapping.forEach((block) => removals.add(block.id));
+      blocks.push(this.createPdfUserTextBlock(pageNum, draft, overlapping[0]?.id));
+    }
+
+    if (!blocks.length) return [];
+
+    this.addedRichTexts.update((prev) => {
+      const existing = (prev[pageNum] || []) as UserTextElement[];
+      const retained = existing.filter((block) => !removals.has(block.id));
+      const retainedIds = new Set(retained.map((block) => block.id));
+      const merged = [...retained];
+      for (const block of blocks) {
+        const idx = merged.findIndex((item) => item.id === block.id);
+        if (idx >= 0) merged[idx] = block;
+        else if (!retainedIds.has(block.id)) merged.push(block);
+      }
+      return { ...prev, [pageNum]: merged };
+    });
+    this.applyMaskToSourceTextIds(pageNum, blocks.flatMap((block) => this.userTextSourceIds(block)));
+    return blocks;
+  }
+
+  private applyMaskToSourceTextIds(pageNum: number, sourceTextIds: readonly string[]): void {
+    if (!sourceTextIds.length) return;
+    const pg = this.pages().find((item) => item.pageNum === pageNum) || null;
+    this.textEdits.update((prev) => {
+      const nextPage = { ...(prev[pageNum] || {}) };
+      for (const id of sourceTextIds) {
+        const src = pg?.textElements.find((item) => item.id === id);
+        nextPage[id] = {
+          html: nextPage[id]?.html ?? (src ? this.defaultHtmlForPdfText(src) : '<p><br></p>'),
+          maskOriginal: true,
+        };
+      }
+      return { ...prev, [pageNum]: nextPage };
+    });
+  }
+
+  private clearMaskForSourceTextIds(pageNum: number, sourceTextIds: readonly string[], excludingBlockId?: string): void {
+    if (!sourceTextIds.length) return;
+    const retained = new Set(
+      ((this.addedRichTexts()[pageNum] || []) as UserTextElement[])
+        .filter((block) => block.id !== excludingBlockId)
+        .flatMap((block) => this.userTextSourceIds(block)),
+    );
+
+    this.textEdits.update((prev) => {
+      const currentPage = prev[pageNum];
+      if (!currentPage) return prev;
+      const nextPage = { ...currentPage };
+      let changed = false;
+      for (const id of sourceTextIds) {
+        if (retained.has(id) || !(id in nextPage)) continue;
+        delete nextPage[id];
+        changed = true;
+      }
+      if (!changed) return prev;
+      const next = { ...prev };
+      if (Object.keys(nextPage).length) next[pageNum] = nextPage;
+      else delete next[pageNum];
+      return next;
+    });
+  }
+
+  private defaultHtmlForPdfText(el: TextElement): string {
+    return createPdfRichTextBlocks([el])[0]?.html ?? `<p>${this.escapeHtml(el.content || '')}</p>`;
+  }
+
   private buildWordExportHtml(): string {
     const title = this.pdfTitle() || 'Proposal';
     const sections = this.proposalSections();
@@ -2560,10 +2740,50 @@ export class PdfDesignExtractorComponent {
     return { r, g, b };
   }
 
-  private htmlToPlainText(html: string): string {
-    const tmp = document.createElement('div');
-    tmp.innerHTML = html || '';
-    return (tmp.textContent || '').replace(/\s+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+  private richHtmlToPlainText(html: string): string {
+    const root = document.createElement('div');
+    root.innerHTML = html || '';
+
+    const inlineText = (node: Node): string => {
+      if (node.nodeType === Node.TEXT_NODE) return node.textContent || '';
+      if (node.nodeType !== Node.ELEMENT_NODE) return '';
+      const el = node as HTMLElement;
+      if (el.tagName === 'BR') return '\n';
+      return Array.from(el.childNodes).map((child) => inlineText(child)).join('');
+    };
+
+    const blocks: string[] = [];
+    const pushBlock = (text: string) => {
+      const cleaned = text.replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').replace(/[ \t]{2,}/g, ' ').trim();
+      if (cleaned) blocks.push(cleaned);
+    };
+
+    const visit = (node: Node): void => {
+      if (node.nodeType === Node.TEXT_NODE) {
+        pushBlock(node.textContent || '');
+        return;
+      }
+      if (node.nodeType !== Node.ELEMENT_NODE) return;
+      const el = node as HTMLElement;
+      const tag = el.tagName;
+      if (tag === 'UL' || tag === 'OL') {
+        const items = Array.from(el.children).filter((child) => child.tagName === 'LI');
+        items.forEach((item, idx) => {
+          const prefix = tag === 'OL' ? `${idx + 1}. ` : '• ';
+          pushBlock(prefix + inlineText(item));
+        });
+        return;
+      }
+      if (['P', 'DIV', 'BLOCKQUOTE', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'LI'].includes(tag)) {
+        pushBlock(inlineText(el));
+        return;
+      }
+      Array.from(el.childNodes).forEach((child) => visit(child));
+    };
+
+    Array.from(root.childNodes).forEach((node) => visit(node));
+    if (!blocks.length) pushBlock(root.textContent || '');
+    return blocks.join('\n');
   }
 
   private wrapTextToWidth(
@@ -2616,11 +2836,49 @@ export class PdfDesignExtractorComponent {
       const layoutEdits = this.layoutEdits();
       const imageEdits = this.imageEdits();
       const addedImages = this.addedImages();
+      const addedRichTexts = this.addedRichTexts();
 
       for (const pg of pages) {
         const page = pdfDoc.getPage(pg.pageNum - 1);
         const { width: pw, height: ph } = page.getSize();
         const bg = this.hexToRgb01(pg.bgColor || '#ffffff');
+        const sourceIdsCoveredByBlocks = new Set(
+          ((addedRichTexts[pg.pageNum] || []) as UserTextElement[]).flatMap((block) => this.userTextSourceIds(block)),
+        );
+
+        const drawTextBlock = async (
+          plain: string,
+          rect: { x: number; yTop: number; w: number; h: number },
+          style: TextStyle | null,
+        ) => {
+          if (!plain.trim()) return;
+          const size = Math.max(6, (style?.fontSizePx || style?.fontSize || 12) / SCALE);
+          const isBold = style?.fontWeight === 'bold';
+          const isItalic = style?.fontStyle === 'italic';
+          const fontName = isBold
+            ? isItalic
+              ? StandardFonts.HelveticaBoldOblique
+              : StandardFonts.HelveticaBold
+            : isItalic
+              ? StandardFonts.HelveticaOblique
+              : StandardFonts.Helvetica;
+          const font = await pdfDoc.embedFont(fontName);
+          const col = this.hexToRgb01(style?.color || '#0f172a');
+          const x = rect.x / SCALE;
+          const y = ph - rect.yTop / SCALE - rect.h / SCALE;
+          const w = rect.w / SCALE;
+          const h = rect.h / SCALE;
+          const pad = Math.max(1, size * 0.12);
+          const lineHeight = size * 1.25;
+          const measure = (s: string) => font.widthOfTextAtSize(s, size);
+          const lines = this.wrapTextToWidth(plain, Math.max(2, w - pad * 2), measure);
+          let ty = y + h - pad - size;
+          for (const line of lines) {
+            if (ty < y + pad) break;
+            page.drawText(line, { x: x + pad, y: ty, size, font, color: rgb(col.r, col.g, col.b) });
+            ty -= lineHeight;
+          }
+        };
 
         // 1) Mask + redraw edited text
         const tMap = textEdits[pg.pageNum] || {};
@@ -2637,29 +2895,9 @@ export class PdfDesignExtractorComponent {
 
           page.drawRectangle({ x, y, width: w, height: h, color: rgb(bg.r, bg.g, bg.b) });
 
-          const plain = this.htmlToPlainText(ed.html || '');
-          const size = Math.max(6, (src.style.fontSizePx || 12) / SCALE);
-          const isBold = src.style.fontWeight === 'bold';
-          const isItalic = src.style.fontStyle === 'italic';
-          const fontName = isBold
-            ? isItalic
-              ? StandardFonts.HelveticaBoldOblique
-              : StandardFonts.HelveticaBold
-            : isItalic
-              ? StandardFonts.HelveticaOblique
-              : StandardFonts.Helvetica;
-          const font = await pdfDoc.embedFont(fontName);
-
-          const col = this.hexToRgb01(src.style.color || '#0f172a');
-          const pad = Math.max(1, size * 0.12);
-          const lineHeight = size * 1.25;
-          const measure = (s: string) => font.widthOfTextAtSize(s, size);
-          const lines = this.wrapTextToWidth(plain, Math.max(2, w - pad * 2), measure);
-          let ty = y + h - pad - size;
-          for (const line of lines) {
-            if (ty < y + pad) break;
-            page.drawText(line, { x: x + pad, y: ty, size, font, color: rgb(col.r, col.g, col.b) });
-            ty -= lineHeight;
+          if (!sourceIdsCoveredByBlocks.has(textId)) {
+            const plain = this.richHtmlToPlainText(ed.html || '');
+            await drawTextBlock(plain, { x: le.x ?? src.x, yTop: le.y ?? src.y, w: le.w ?? src.w, h: le.h ?? src.h }, src.style);
           }
         }
 
@@ -2705,6 +2943,22 @@ export class PdfDesignExtractorComponent {
           const h = imgEl.h / SCALE;
           const y = ph - yTop - h;
           await drawImageDataUrl(imgEl.src, x, y, w, h);
+        }
+
+        for (const block of addedRichTexts[pg.pageNum] || []) {
+          const plain = this.richHtmlToPlainText(block.html || '');
+          await drawTextBlock(
+            plain,
+            { x: block.x, yTop: block.y, w: block.w, h: block.h },
+            block.sourceStyle ?? this.pdfTextStyle(block) ?? {
+              fontFamily: 'Helvetica',
+              fontSize: 12,
+              fontSizePx: 12,
+              fontWeight: 'normal',
+              fontStyle: 'normal',
+              color: '#0f172a',
+            },
+          );
         }
       }
 

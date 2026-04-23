@@ -1014,6 +1014,69 @@ select:focus-visible {
   margin: 0.12em 0;
 }
 
+.placed-user-text-body {
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+  display: block;
+  max-width: 100%;
+  min-height: 100%;
+  text-align: inherit;
+  background: transparent;
+  border: none;
+  padding: 0;
+  white-space: normal;
+  word-break: break-word;
+}
+
+.placed-user-text-body:focus {
+  box-shadow: none;
+}
+
+.placed-user-text-body--readonly {
+  cursor: default;
+}
+
+.placed-user-text-body:not(.placed-user-text-body--readonly) {
+  cursor: text;
+}
+
+.placed-user-text-body p,
+.placed-user-text-body div,
+.placed-user-text-body blockquote,
+.placed-user-text-body h1,
+.placed-user-text-body h2,
+.placed-user-text-body h3,
+.placed-user-text-body h4,
+.placed-user-text-body h5,
+.placed-user-text-body h6 {
+  margin: 0 0 0.35em;
+}
+
+.placed-user-text-body p:last-child,
+.placed-user-text-body div:last-child,
+.placed-user-text-body blockquote:last-child,
+.placed-user-text-body h1:last-child,
+.placed-user-text-body h2:last-child,
+.placed-user-text-body h3:last-child,
+.placed-user-text-body h4:last-child,
+.placed-user-text-body h5:last-child,
+.placed-user-text-body h6:last-child {
+  margin-bottom: 0;
+}
+
+.placed-user-text-body ul {
+  list-style: disc;
+  margin: 0.25em 0;
+  padding-left: 1.5em;
+}
+
+.placed-user-text-body ol {
+  list-style: decimal;
+  margin: 0.25em 0;
+  padding-left: 1.5em;
+}
+
 /* Inline edit textarea (canvas) */
 /* NOTE: text colour is NOT set here — it is bound via [style.color] from el.style.color */
 .edit-textarea {

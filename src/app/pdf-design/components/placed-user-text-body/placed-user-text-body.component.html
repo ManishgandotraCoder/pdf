@@ -1,10 +1,12 @@
 <div
-  style="
-    height: 100%;
-    overflow: auto;
-    display: inline-block;
-    max-width: 100%;
-    text-align: inherit;
-  "
-  [innerHTML]="(html() || '<p><br></p>') | safeHtml"
+  #editable
+  class="placed-user-text-body rich-text-editor-surface"
+  [class.placed-user-text-body--readonly]="readOnly()"
+  (input)="onInput($event)"
+  (focus)="onFocus()"
+  (blur)="onBlur($event)"
+  (pointerdown)="onPointerDown($event)"
+  (pointermove)="onPointerMove($event)"
+  (pointerup)="onPointerUp($event)"
+  (pointercancel)="onPointerCancel($event)"
 ></div>
