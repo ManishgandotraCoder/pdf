@@ -424,144 +424,7 @@
         </div>
         }
 
-        @if (editorMode() === 'edit') {
-        <div style="position: absolute; top: 0; left: 0; pointer-events: none; z-index: 1" [style.width.px]="pgv.width"
-          [style.height.px]="pgv.height">
-          @for (el of overlayEls(); track el.id; let oi = $index) {
-          @let bord =
-          el.type === 'text'
-          ? '#2aacb8'
-          : el.type === 'image'
-          ? '#f59e0b'
-          : el.type === 'video'
-          ? '#6366f1'
-          : '#8b5cf6';
-          @let bgTint =
-          el.type === 'text'
-          ? 'rgba(42,172,184,0.1)'
-          : el.type === 'image'
-          ? 'rgba(245,158,11,0.1)'
-          : el.type === 'video'
-          ? 'rgba(99,102,241,0.12)'
-          : 'rgba(139,92,246,0.1)';
-          @let ob = overlayBounds(el);
-          @let active = selEl()?.id === el.id;
-          @let imgEdited =
-          el.type === 'image' &&
-          !el._userAdded &&
-          (imageEdits()[pgv.pageNum]?.[el.id]?.src || imageEdits()[pgv.pageNum]?.[el.id]?.removed);
-          @let imgUser = el.type === 'image' && el._userAdded;
-          @let vidUser = el.type === 'video';
-          @let imgRemoved = el.type === 'image' && imageEdits()[pgv.pageNum]?.[el.id]?.removed;
-          @let placementDrag = el.type === 'image' || el.type === 'video' || el.type === 'text';
-          @let imgCursor =
-          el.type === 'text'
-          ? draggingImageId() === el.id
-          ? 'grabbing'
-          : 'grab'
-          : !placementDrag
-          ? 'pointer'
-          : el.type === 'image' && imgRemoved
-          ? 'pointer'
-          : draggingImageId() === el.id
-          ? 'grabbing'
-          : 'grab';
-          <div style="position: absolute; pointer-events: auto; box-sizing: border-box; outline-offset: 1px"
-            [style.cursor]="imgCursor" [style.touch-action]="placementDrag ? 'none' : 'auto'" [style.left.px]="ob.x"
-            [style.top.px]="ob.y" [style.width.px]="max2(ob.w)" [style.height.px]="max2(ob.h)" [style.z-index]="10 + oi"
-            [attr.title]="overlayElementTitle(el)" [style.border]="'1px solid ' + (active ? bord : bord + '66')"
-            [style.background]="active ? bgTint : 'transparent'" [style.outline]="
-                    imgEdited || imgUser
-                      ? '1.5px solid #f59e0b'
-                      : vidUser
-                        ? '1.5px solid #6366f1'
-                        : 'none'
-                  " (click)="onOverlayClick($event, el, placementDrag, active)"
-            (dblclick)="onOverlayDblClick($event, el)"
-            (pointerdown)="onPlacementPointerDown($event, el, placementDrag)"
-            (pointermove)="onPointerMoveMaybe($event, placementDrag)"
-            (pointerup)="onPointerUpMaybe($event, placementDrag)"
-            (pointercancel)="onPointerUpMaybe($event, placementDrag)"
-            (mouseenter)="onOverlayEnter($event, active, bgTint)" (mouseleave)="onOverlayLeave($event, active)">
-            @if (el.type === 'video') {
-            <button type="button" [attr.title]="addedVideoPlaying()[el.id] ? 'Pause' : 'Play'"
-              [attr.aria-label]="addedVideoPlaying()[el.id] ? 'Pause' : 'Play'" (pointerdown)="$event.stopPropagation()"
-              (click)="toggleAddedVideoPlayback($event, el.id)" style="
-                        position: absolute;
-                        top: 50%;
-                        left: 50%;
-                        transform: translate(-50%, -50%);
-                        z-index: 4;
-                        padding: 6px;
-                        border: none;
-                        background: transparent;
-                        color: rgba(255, 255, 255, 0.96);
-                        cursor: pointer;
-                        filter: drop-shadow(0 1px 4px rgba(0, 0, 0, 0.55));
-                        pointer-events: auto;
-                      ">
-              @if (addedVideoPlaying()[el.id]) {
-              <svg width="30" height="30" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                <rect x="6" y="5.5" width="4.5" height="13" rx="1.25" />
-                <rect x="13.5" y="5.5" width="4.5" height="13" rx="1.25" />
-              </svg>
-              } @else {
-              <svg width="30" height="30" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                <path d="M8 5v14l11-7z" />
-              </svg>
-              }
-            </button>
-            }
-            @if (active && showOverlayResizeHandles(el)) {
-            @for (rh of resizeHandleList; track rh.id) {
-            <div [style]="resizeHandleBoxStyle(rh)" (pointerdown)="onResizeHandlePointerDown($event, el, rh.id)"
-              (pointermove)="onImagePointerMove($event)" (pointerup)="onImagePointerUp($event)"
-              (pointercancel)="onImagePointerUp($event)"></div>
-            }
-            }
-            @if (active && (el.type === 'image' || el.type === 'video')) {
-            <button type="button" title="Remove" aria-label="Remove" (pointerdown)="$event.stopPropagation()"
-              (click)="onOverlayMediaDelete($event, el)" style="
-                        position: absolute;
-                        top: 2px;
-                        right: 2px;
-                        z-index: 25;
-                        width: 28px;
-                        height: 28px;
-                        padding: 0;
-                        display: flex;
-                        align-items: center;
-                        justify-content: center;
-                        border-radius: 6px;
-                        border: 1px solid rgba(0, 0, 0, 0.1);
-                        background: rgba(255, 255, 255, 0.95);
-                        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
-                        color: #64748b;
-                        cursor: pointer;
-                      ">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                stroke-linecap="round" aria-hidden="true">
-                <path d="M18 6L6 18M6 6l12 12" />
-              </svg>
-            </button>
-            }
-          </div>
-          }
-        </div>
-        }
-
-        @if (editorMode() === 'view') {
-        <div style="position: absolute; top: 0; left: 0; pointer-events: none; z-index: 1" [style.width.px]="pgv.width"
-          [style.height.px]="pgv.height">
-          @for (el of overlayElsForViewTooltips(); track el.id; let oi = $index) {
-          @let ob = overlayBounds(el);
-          <div
-            style="position: absolute; pointer-events: auto; box-sizing: border-box; border: none; background: transparent; cursor: default"
-            [style.left.px]="ob.x" [style.top.px]="ob.y" [style.width.px]="max2(ob.w)" [style.height.px]="max2(ob.h)"
-            [style.z-index]="10 + oi" [attr.title]="overlayElementTitle(el)"></div>
-          }
-        </div>
-        }
+        <!-- overlays removed (view-only rendering) -->
 
         @for (t of addedTables()[pgv.pageNum] || []; track t.id) {
         @let selected = selEl()?.id === t.id;
@@ -674,18 +537,7 @@
               [style.color]="sty?.color || null"
             >
               <div style="flex: 1; min-width: 0; display: flex; justify-content: flex-start">
-                <app-placed-user-text-body
-                  [html]="rt.html"
-                  [readOnly]="readOnly"
-                  (htmlChange)="updateUserTextHtml(rt.id, $event)"
-                  (focusFirstEdit)="onPlacedUserTextFocus(rt.id)"
-                  (selectionStateChange)="setUserTextSelection(rt.id, $event)"
-                  (focusStateChange)="setUserTextFocus(rt.id, $event)"
-                  (pointerMove)="onImagePointerMove($event)"
-                  (pointerUp)="onImagePointerUp($event)"
-                  (pointerCancel)="onImagePointerUp($event)"
-                  (altDragPointerDown)="onAltDragUserText($event, rt)"
-                />
+                <app-placed-user-text-body [html]="rt.html" [readOnly]="true" />
               </div>
             </div>
 
@@ -821,20 +673,7 @@
           <span class="tooltip-text">View</span>
         </div>
 
-        <!-- EDIT -->
-        <div class="tooltip-wrapper">
-          <button type="button" title="Edit — select and modify elements" (click)="editorMode.set('edit')"
-            class="inspector-icon-btn"
-            style="width:40px; height:40px; display:flex; align-items:center; justify-content:center; border-radius:8px; transition:all 0.2s cubic-bezier(0.4,0,0.2,1); background:#fff; box-shadow:0 1px 2px rgba(0,0,0,0.08)"
-            [style.border]="'1px solid ' + (editorMode() === 'edit' ? '#1976d2' : 'rgba(0,0,0,0.12)')"
-            [style.color]="editorMode() === 'edit' ? '#1976d2' : '#0f766e'" [style.cursor]="'pointer'">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-            </svg>
-          </button>
-          <span class="tooltip-text">Edit</span>
-        </div>
+        <!-- Edit mode removed -->
 
         <!-- ADD PAGE -->
         <div class="tooltip-wrapper">

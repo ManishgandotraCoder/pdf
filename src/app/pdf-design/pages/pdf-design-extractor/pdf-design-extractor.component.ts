@@ -135,7 +135,7 @@ export class PdfDesignExtractorComponent {
   readonly cropModal = signal<CropModalState | null>(null);
   readonly templates = signal<TemplateCluster[]>([]);
   readonly tokens = signal<DesignTokens>({ colors: [], fonts: [], sizes: [] });
-  readonly editorMode = signal<'edit' | 'view'>('edit');
+  readonly editorMode = signal<'edit' | 'view'>('view');
   readonly activeAddTool = signal<'image' | 'video' | 'table' | 'userText' | null>(null);
   readonly zoom = signal(0.9);
   readonly viewerImageDropActive = signal(false);
@@ -2030,7 +2030,7 @@ export class PdfDesignExtractorComponent {
   overlayElementTitle(el: SelElement): string {
     switch (el.type) {
       case 'text':
-        return 'Text — Select · drag to move · double-click to edit';
+        return 'Text';
       case 'image':
         return 'Image — Drag to move, handles to resize';
       case 'video':

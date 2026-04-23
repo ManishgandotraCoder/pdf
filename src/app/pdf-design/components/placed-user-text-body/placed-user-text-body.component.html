@@ -1,43 +1,10 @@
-@if (readOnly()) {
-  <div
-    style="
-      height: 100%;
-      overflow: auto;
-      display: inline-block;
-      max-width: 100%;
-      text-align: inherit;"
-    [innerHTML]="(html() || '<p><br></p>') | safeHtml"
-  ></div>
-} @else {
-  <div
-    #editable
-    contenteditable="true"
-    (pointerdown)="onPointerDown($event)"
-    (focus)="onFocus(); focusFirstEdit.emit()"
-    (mouseup)="onMouseUp()"
-    (keyup)="onKeyUp()"
-    (blur)="onBlur()"
-    (pointermove)="pointerMove.emit($event)"
-    (pointerup)="pointerUp.emit($event)"
-    (pointercancel)="pointerCancel.emit($event)"
-    (input)="onInput($event)"
-    style="
-      height: 100%;
-      overflow: auto;
-      display: inline-block;
-      max-width: 100%;
-      outline: none;
-      font-family: inherit;
-      font-size: inherit;
-      font-weight: inherit;
-      font-style: inherit;
-      line-height: inherit;
-      color: inherit;
-      text-align: inherit;
-      word-break: break-word;
-      touch-action: manipulation;
-      cursor: text;
-    "
-    title="Hold Alt (⌥) and drag anywhere here to move the box"
-  ></div>
-}
+<div
+  style="
+    height: 100%;
+    overflow: auto;
+    display: inline-block;
+    max-width: 100%;
+    text-align: inherit;
+  "
+  [innerHTML]="(html() || '<p><br></p>') | safeHtml"
+></div>
