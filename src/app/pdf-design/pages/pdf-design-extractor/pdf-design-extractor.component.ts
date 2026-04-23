@@ -19,6 +19,7 @@ import { RichTextToolbarComponent } from '../../components/rich-text-toolbar/ric
 import { LoadingScreenComponent } from '../../components/loading-screen/loading-screen.component';
 import { PlacedTableGridComponent } from '../../components/placed-table-grid/placed-table-grid.component';
 import { PlacedUserTextBodyComponent } from '../../components/placed-user-text-body/placed-user-text-body.component';
+import { PlacedUserTextHeaderComponent } from '../../components/placed-user-text-header/placed-user-text-header.component';
 import { UploadZoneComponent } from '../../components/upload-zone/upload-zone.component';
 import {
   AddedImagesMap,
@@ -82,6 +83,7 @@ type PageLayoutEntry =
     PlacedTableGridComponent,
     PlacedTableHeaderComponent,
     PlacedUserTextBodyComponent,
+    PlacedUserTextHeaderComponent,
     RichTextToolbarComponent,
   ],
   templateUrl: './pdf-design-extractor.component.html',
@@ -2148,7 +2150,7 @@ export class PdfDesignExtractorComponent {
       y,
       w,
       h,
-      html: '<p></p>',
+      html: '<p><br></p>',
       sourceStyle: {
         fontFamily: defaultFont,
         fontSize: 12,
@@ -2167,6 +2169,7 @@ export class PdfDesignExtractorComponent {
     this.activeAddTool.set('userText');
     this.placedTextUndoGate = id;
     this.selEl.set(block);
+    this.focusUserText(id);
   }
 
   stageTransform(): string {
@@ -2252,6 +2255,41 @@ export class PdfDesignExtractorComponent {
     if (this.editorMode() !== 'edit') return;
     e.stopPropagation();
     this.selEl.set(rt);
+    // If the user clicked inside the contenteditable, the browser already placed the caret
+    // at the intended position. Don't override it by forcing the caret to the end.
+    const target = e.target as HTMLElement | null;
+    if (target?.closest('[contenteditable="true"]')) return;
+    this.focusUserText(rt.id);
+  }
+
+  private focusUserText(id: string): void {
+    queueMicrotask(() => {
+      const stage = this.pageStageRef()?.nativeElement;
+      if (!stage) return;
+      const host = stage.querySelector(`[data-user-text-id="${CSS.escape(id)}"]`) as HTMLElement | null;
+      const focusTarget = (host?.querySelector('.placed-user-text-body') || host) as HTMLElement | null;
+      focusTarget?.focus?.();
+      if (!focusTarget || typeof document === 'undefined') return;
+      try {
+        // If the selection is already inside this editor (e.g. user clicked a caret position),
+        // leave it alone.
+        const existing = document.getSelection();
+        if (existing?.rangeCount) {
+          const anc = existing.getRangeAt(0).commonAncestorContainer;
+          const node = anc.nodeType === Node.ELEMENT_NODE ? (anc as Element) : anc.parentElement;
+          if (node && focusTarget.contains(node)) return;
+        }
+        const sel = document.getSelection();
+        if (!sel) return;
+        const range = document.createRange();
+        range.selectNodeContents(focusTarget);
+        range.collapse(false);
+        sel.removeAllRanges();
+        sel.addRange(range);
+      } catch {
+        /* focus alone is still better than failing */
+      }
+    });
   }
 
   private shouldStartPlacementDragFromTarget(target: EventTarget | null): boolean {

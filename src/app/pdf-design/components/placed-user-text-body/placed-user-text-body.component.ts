@@ -35,7 +35,7 @@ export class PlacedUserTextBodyComponent {
     effect(() => {
       const el = this.editable()?.nativeElement;
       if (!el) return;
-      const html = this.html() || '<p><br></p>';
+      const html = this.normalizeEditableHtml(this.html());
       if (!this.focused && el.innerHTML !== html) el.innerHTML = html;
       el.setAttribute('contenteditable', this.readOnly() ? 'false' : 'true');
     });
@@ -72,8 +72,11 @@ export class PlacedUserTextBodyComponent {
 
   onPointerDown(e: PointerEvent): void {
     if (this.readOnly()) return;
-    if (!e.altKey) return;
-    this.altDragPointerDown.emit(e);
+    if (e.altKey) {
+      this.altDragPointerDown.emit(e);
+      return;
+    }
+    this.maybePlaceCaretOnClickedEmptyLine(e);
   }
 
   onPointerMove(e: PointerEvent): void {
@@ -105,5 +108,70 @@ export class PlacedUserTextBodyComponent {
     const sel = document.getSelection();
     if (!el || !sel?.rangeCount) return false;
     return el.contains(sel.getRangeAt(0).commonAncestorContainer);
+  }
+
+  private normalizeEditableHtml(value: string | null | undefined): string {
+    const raw = String(value ?? '').trim();
+    if (!raw) return '<p><br></p>';
+    if (typeof document === 'undefined') return raw;
+
+    const probe = document.createElement('div');
+    probe.innerHTML = raw;
+    const text = (probe.textContent || '').replace(/\u00a0/g, '').trim();
+    const hasAtomicContent = !!probe.querySelector('img, video, table, hr, iframe, svg, canvas');
+    return text || hasAtomicContent ? raw : '<p><br></p>';
+  }
+
+  private maybePlaceCaretOnClickedEmptyLine(e: PointerEvent): void {
+    const el = this.editable()?.nativeElement;
+    if (!el) return;
+    if (e.target !== el) return;
+    if (!this.isEffectivelyEmpty(el)) return;
+
+    const rect = el.getBoundingClientRect();
+    const offsetY = Math.max(0, e.clientY - rect.top + el.scrollTop);
+    queueMicrotask(() => {
+      const root = this.editable()?.nativeElement;
+      if (!root || this.readOnly()) return;
+      const lineHeight = this.estimatedLineHeight(root);
+      const lineIndex = Math.max(0, Math.floor(offsetY / Math.max(1, lineHeight)));
+      const html = Array.from({ length: lineIndex + 1 }, () => '<p><br></p>').join('');
+      if (root.innerHTML !== html) {
+        root.innerHTML = html;
+        this.htmlChange.emit(html);
+      }
+      root.focus();
+      this.placeCaretAtParagraph(root, lineIndex);
+    });
+  }
+
+  private isEffectivelyEmpty(el: HTMLElement): boolean {
+    const text = (el.textContent || '').replace(/\u00a0/g, '').trim();
+    if (text) return false;
+    return !el.querySelector('img, video, table, hr, iframe, svg, canvas');
+  }
+
+  private estimatedLineHeight(el: HTMLElement): number {
+    const cs = getComputedStyle(el);
+    const parsed = parseFloat(cs.lineHeight);
+    if (Number.isFinite(parsed) && parsed > 0) return parsed;
+    const fontSize = parseFloat(cs.fontSize);
+    return Number.isFinite(fontSize) && fontSize > 0 ? fontSize * 1.4 : 18;
+  }
+
+  private placeCaretAtParagraph(root: HTMLElement, lineIndex: number): void {
+    try {
+      const sel = document.getSelection();
+      if (!sel) return;
+      const blocks = Array.from(root.children);
+      const paragraph = (blocks[lineIndex] || blocks[blocks.length - 1] || root) as Node;
+      const range = document.createRange();
+      range.setStart(paragraph, 0);
+      range.collapse(true);
+      sel.removeAllRanges();
+      sel.addRange(range);
+    } catch {
+      /* leave focus in place if the browser rejects the range */
+    }
   }
 }

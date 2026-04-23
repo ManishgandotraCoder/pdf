@@ -606,12 +606,7 @@
         @let readOnly = editorMode() !== 'edit';
         @let isPdfText = isPdfDerivedUserText(rt);
         @let sty = isPdfText ? pdfTextStyle(rt) : null;
-        @let showChrome = selected && editorMode() === 'edit';
-        @let sideSlotPx = showChrome ? 28 : 0;
-        @let showLeftDrag = showChrome;
-        @let showRightClose = showChrome;
-        @let leftColPx = showLeftDrag ? sideSlotPx : 0;
-        @let rightColPx = showRightClose ? sideSlotPx : 0;
+        @let showChrome = selected && !readOnly && !isPdfText;
         <div style="
                 position: absolute;
                 z-index: 2;
@@ -628,93 +623,23 @@
           (mousedown)="onPlacedRichTextMousedown($event, readOnly)" (pointermove)="onImagePointerMove($event)"
           (pointerup)="onImagePointerUp($event)" (pointercancel)="onImagePointerUp($event)"
           (click)="onPlacedRichTextClick($event, rt)">
-          @if (showLeftDrag) {
-          <div
-            role="presentation"
-            (pointerdown)="onUserTextDragHandlePointerDown($event, rt, showChrome)"
-            (pointermove)="onUserTextDragHandlePointerMove($event, showChrome)"
-            (pointerup)="onUserTextDragHandlePointerUp($event, showChrome)"
-            (pointercancel)="onUserTextDragHandlePointerUp($event, showChrome)"
-            style="
-              position: absolute;
-              top: 4px;
-              display: flex;
-              align-items: center;
-              justify-content: center;
-              box-sizing: border-box;
-              pointer-events: auto;
-              opacity: 1;
-              color: #2aacb8;
-              z-index: 3;
-            "
-            [style.left.px]="-(leftColPx + 6)"
-            [style.width.px]="leftColPx"
-            [style.height.px]="28"
-            [style.cursor]="draggingImageId() === rt.id ? 'grabbing' : 'grab'"
-            title="Drag to move · or hold Alt (⌥) and drag inside the text"
-          >
-            <span aria-hidden="true" style="letter-spacing: -2px; font-weight: 700; font-size: 14px; line-height: 1">⋮⋮</span>
-          </div>
-          }
-
-          @if (showRightClose) {
-          <div
-            style="
-              position: absolute;
-              top: 2px;
-              display: flex;
-              align-items: center;
-              justify-content: center;
-              box-sizing: border-box;
-              pointer-events: auto;
-              color: #2aacb8;
-              z-index: 3;
-            "
-            [style.right.px]="-(rightColPx + 6)"
-            [style.width.px]="rightColPx"
-            [style.height.px]="32"
-          >
-            <button
-              type="button"
-              title="Remove"
-              aria-label="Remove"
-              (pointerdown)="$event.stopPropagation()"
-              (click)="$event.stopPropagation(); removeUserTextInspector(rt)"
-              style="
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                width: 32px;
-                height: 32px;
-                margin: 0;
-                padding: 0;
-                border: none;
-                border-radius: 8px;
-                background: transparent;
-                color: #2aacb8;
-                cursor: pointer;
-              "
-            >
-              <svg
-                width="18"
-                height="18"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                aria-hidden="true"
-              >
-                <path d="M18 6L6 18M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
+          @if (showChrome) {
+          <app-placed-user-text-header
+            [selected]="selected"
+            [dragging]="draggingImageId() === rt.id"
+            (dragPointerDown)="onImagePointerDown($event, rt)"
+            (dragPointerMove)="onImagePointerMove($event)"
+            (dragPointerUp)="onImagePointerUp($event)"
+            (dragPointerCancel)="onImagePointerUp($event)"
+            (remove)="removeUserTextInspector(rt)"
+          />
           }
 
           <div
             style="display: flex; align-items: flex-start; width: 100%; flex: 1; min-height: 0; box-sizing: border-box; overflow: hidden">
             <div
               style="flex: 1; min-height: 0; min-width: 0; overflow: hidden; display: flex; flex-direction: column; text-align: left; box-sizing: border-box"
+              [style.cursor]="readOnly ? null : 'text'"
               [style.padding]="isPdfText ? '0' : '8px 10px'"
               [style.font-family]="sty?.fontFamily || null"
               [style.font-size.px]="sty?.fontSizePx || null"
@@ -724,7 +649,7 @@
               [style.line-height]="isPdfText ? 'normal' : '1.45'"
             >
               <div style="flex: 1; min-width: 0; display: flex; justify-content: flex-start">
-                <app-placed-user-text-body [html]="rt.html" [readOnly]="readOnly"
+                <app-placed-user-text-body [html]="rt.html" [readOnly]="readOnly" [attr.data-user-text-id]="rt.id"
                   (htmlChange)="updateUserTextHtml(rt.id, $event)"
                   (focusFirstEdit)="onPlacedUserTextFocus(rt.id)"
                   (selectionStateChange)="setUserTextSelection(rt.id, $event)"

@@ -1,6 +1,10 @@
 <div
   #editable
   class="placed-user-text-body rich-text-editor-surface"
+  tabindex="0"
+  role="textbox"
+  aria-multiline="true"
+  spellcheck="true"
   [class.placed-user-text-body--readonly]="readOnly()"
   (input)="onInput($event)"
   (focus)="onFocus()"
