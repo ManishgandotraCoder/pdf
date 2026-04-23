@@ -186,8 +186,8 @@ export async function extractPage(page: PDFPageProxy, pageNum: number): Promise<
     const [sx, sy] = pdfjsLib.Util.applyTransform([ti.transform[4], ti.transform[5]], vp.transform);
     const fontSize = Math.sqrt(ti.transform[0] ** 2 + ti.transform[1] ** 2) * SCALE;
     const info = (styles as Record<string, { fontFamily?: string }>)[ti.fontName] || {};
-    const raw = info.fontFamily || 'sans-serif';
-    const fontFamily = raw.replace(/,.*$/, '').trim();
+    const raw = info.fontFamily || ti.fontName || 'sans-serif';
+    const fontFamily = normalizePdfFontFamily(raw, ti.fontName);
     const elX = sx;
     const elY = sy - fontSize;
     const elW = Math.max(ti.width * SCALE, 4);
@@ -202,8 +202,8 @@ export async function extractPage(page: PDFPageProxy, pageNum: number): Promise<
       fontFamily,
       fontSize: Math.round((fontSize / SCALE) * 10) / 10,
       fontSizePx: fontSize,
-      fontWeight: /bold/i.test(raw) || /bold/i.test(ti.fontName) ? 'bold' : 'normal',
-      fontStyle: /italic|oblique/i.test(raw) || /italic|oblique/i.test(ti.fontName) ? 'italic' : 'normal',
+      fontWeight: inferPdfFontWeight(raw, ti.fontName),
+      fontStyle: inferPdfFontStyle(raw, ti.fontName),
       color,
     });
   });
@@ -232,6 +232,56 @@ export async function extractPage(page: PDFPageProxy, pageNum: number): Promise<
 
 const RUN_MERGE_GAP_FACTOR = 1.35;
 const RUN_MERGE_GAP_MIN_PX = 18;
+
+function normalizePdfFontFamily(rawFamily: string, fontName = ''): string {
+  const first = String(rawFamily || fontName || 'sans-serif')
+    .split(',')[0]
+    .replace(/['"]/g, '')
+    .trim();
+  const cleaned = first.replace(/^[A-Z]{6}\+/, '').trim();
+  const key = cleaned.replace(/[^a-z0-9]/gi, '').toLowerCase();
+
+  if (!key) return 'sans-serif';
+  if (key.includes('arialnarrow')) return 'Arial Narrow';
+  if (key.includes('arial')) return 'Arial';
+  if (key.includes('helvetica')) return 'Helvetica';
+  if (key.includes('timesnewroman') || key.includes('timesroman') || key === 'times') {
+    return 'Times New Roman';
+  }
+  if (key.includes('courier')) return 'Courier New';
+  if (key.includes('calibri')) return 'Calibri';
+  if (key.includes('cambria')) return 'Cambria';
+  if (key.includes('georgia')) return 'Georgia';
+  if (key.includes('garamond')) return 'Garamond';
+  if (key.includes('palatino')) return 'Palatino Linotype';
+  if (key.includes('bookantiqua')) return 'Book Antiqua';
+  if (key.includes('verdana')) return 'Verdana';
+  if (key.includes('tahoma')) return 'Tahoma';
+  if (key.includes('trebuchet')) return 'Trebuchet MS';
+  if (key.includes('gillsans')) return 'Gill Sans';
+  if (key.includes('centurygothic')) return 'Century Gothic';
+
+  const stripped = cleaned
+    .replace(
+      /(?:[-_\s]?(?:thin|hairline|extralight|ultralight|light|book|regular|roman|normal|medium|semibold|demibold|extrabold|ultrabold|bold|heavy|black|italic|oblique|mt|psmt|ps))+$/i,
+      '',
+    )
+    .trim();
+  return stripped || cleaned || 'sans-serif';
+}
+
+function inferPdfFontWeight(rawFamily: string, fontName = ''): 'bold' | 'normal' {
+  const label = `${rawFamily} ${fontName}`.toLowerCase();
+  if (/(semibold|semi[-_\s]?bold|demibold|demi[-_\s]?bold|extrabold|extra[-_\s]?bold|ultrabold|ultra[-_\s]?bold|bold|black|heavy)/i.test(label)) {
+    return 'bold';
+  }
+  return 'normal';
+}
+
+function inferPdfFontStyle(rawFamily: string, fontName = ''): 'italic' | 'normal' {
+  const label = `${rawFamily} ${fontName}`.toLowerCase();
+  return /italic|oblique/i.test(label) ? 'italic' : 'normal';
+}
 
 export function mergeAdjacentTextRuns(rawRuns: readonly ExtractedTextRun[], pageNum = 0): TextElement[] {
   const sorted = [...rawRuns].sort((a, b) => a.y - b.y || a.x - b.x);

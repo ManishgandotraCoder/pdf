@@ -2058,7 +2058,7 @@ export class PdfDesignExtractorComponent {
     const w = Math.min(380, Math.max(200, pg.width * 0.5));
     const h = Math.min(280, Math.max(100, pg.height * 0.24));
     const { x, y } = this.computeCenteredPlacementRect(pg, w, h);
-    const defaultFont = this.tokens().fonts?.[0] || 'Helvetica';
+    const defaultFont = this.tokens().fonts?.[0] || 'Calibri';
     const block: UserTextElement = {
       id,
       type: 'userText',
@@ -2413,7 +2413,7 @@ export class PdfDesignExtractorComponent {
     const base =
       sel.sourceStyle ??
       this.pdfTextStyle(sel) ?? {
-        fontFamily: 'Helvetica',
+        fontFamily: 'Calibri',
         fontSize: 12,
         fontSizePx: 12,
         fontWeight: 'normal',
@@ -2702,8 +2702,8 @@ export class PdfDesignExtractorComponent {
       type: 'userText',
       x: draft.x,
       y: draft.y,
-      w: Math.max(96, draft.w + 8),
-      h: Math.max(28, draft.h + 6),
+      w: Math.max(1, draft.w),
+      h: Math.max(1, draft.h),
       html: draft.html,
       sourcePageNum: pageNum,
       sourceTextIds: sourceIds,
