@@ -38,7 +38,9 @@ import {
   SelElement,
   TableElement,
   TemplateCluster,
+  TextEditsMap,
   TextElement,
+  TextStyle,
   UserTextElement,
   VideoElement,
 } from '../../models/pdf-design.models';
@@ -63,6 +65,7 @@ import { extractPage } from '../../utils/pdf-extract-page';
 import { PROPOSAL_SECTION_CATALOG } from '../../utils/proposal-sections.catalog';
 import { ensureTableCells, isProbablyHtml } from '../../utils/rich-text.utils';
 import { PdfsApiService } from '../../services/pdfs-api.service';
+import { PlacedTableHeaderComponent } from '../../components/placed-table-header/placed-table-header.component';
 
 @Component({
   selector: 'app-pdf-design-extractor',
@@ -72,6 +75,7 @@ import { PdfsApiService } from '../../services/pdfs-api.service';
     LoadingScreenComponent,
     ImageCropModalComponent,
     PlacedTableGridComponent,
+    PlacedTableHeaderComponent,
     PlacedUserTextBodyComponent,
     RichTextToolbarComponent,
   ],
@@ -83,6 +87,7 @@ export class PdfDesignExtractorComponent {
   private readonly router = inject(Router);
   private readonly pdfsApi = inject(PdfsApiService);
   private openedPdfId: string | null = null;
+  private loadedPdfBuf: ArrayBuffer | null = null;
   private readonly w = globalThis;
 
   private readonly mandatoryCatalogIds = new Set<string>(['cover', 'acceptance']);
@@ -116,6 +121,7 @@ export class PdfDesignExtractorComponent {
   readonly selEl = signal<SelElement | null>(null);
   readonly imageEdits = signal<ImageEditsMap>({});
   readonly layoutEdits = signal<LayoutEditsMap>({});
+  readonly textEdits = signal<TextEditsMap>({});
   /** Right panel: structural tools vs saved assets (placeholder for asset pipeline). */
   readonly inspectorTab = signal<'elements' | 'assets'>('elements');
   /** Proposal workflow (local UI state until backend wiring exists). */
@@ -182,6 +188,8 @@ export class PdfDesignExtractorComponent {
       void this.pages();
       void this.imageEdits();
       void this.addedImages();
+      void this.textEdits();
+      void this.layoutEdits();
 
       const pg = this.pg();
       const canvas = this.canvasRef()?.nativeElement;
@@ -199,7 +207,19 @@ export class PdfDesignExtractorComponent {
         ctx.drawImage(img, 0, 0);
         const pn = pg.pageNum;
         const iEd = this.imageEdits()[pn] || {};
+        const tEd = this.textEdits()[pn] || {};
+        const lEd = this.layoutEdits()[pn] || {};
         const bg = pg.bgColor || '#ffffff';
+        for (const el of pg.textElements) {
+          if (!tEd[el.id]?.maskOriginal) continue;
+          const le = lEd[el.id] || {};
+          const x = le.x ?? el.x;
+          const y = le.y ?? el.y;
+          const w = le.w ?? el.w;
+          const h = le.h ?? el.h;
+          ctx.fillStyle = bg;
+          ctx.fillRect(x - 1, y - 1, w + 2, h + 2);
+        }
         for (const el of pg.images) {
           const ed = iEd[el.id];
           if (ed?.removed) {
@@ -577,6 +597,7 @@ export class PdfDesignExtractorComponent {
     this.selEl.set(null);
     this.imageEdits.set({});
     this.layoutEdits.set({});
+    this.textEdits.set({});
     this.addedImages.set({});
     this.addedVideos.set({});
     this.addedTables.set({});
@@ -618,6 +639,7 @@ export class PdfDesignExtractorComponent {
     const snap: HistorySnapshot = {
       imageEdits: structuredClone(this.imageEdits()),
       layoutEdits: structuredClone(this.layoutEdits()),
+      textEdits: structuredClone(this.textEdits()),
       addedImages: structuredClone(this.addedImages()),
       addedVideos: structuredClone(this.addedVideos()),
       addedTables: structuredClone(this.addedTables()),
@@ -634,6 +656,7 @@ export class PdfDesignExtractorComponent {
     const current: HistorySnapshot = {
       imageEdits: structuredClone(this.imageEdits()),
       layoutEdits: structuredClone(this.layoutEdits()),
+      textEdits: structuredClone(this.textEdits()),
       addedImages: structuredClone(this.addedImages()),
       addedVideos: structuredClone(this.addedVideos()),
       addedTables: structuredClone(this.addedTables()),
@@ -643,6 +666,7 @@ export class PdfDesignExtractorComponent {
     const prev = this.historyStack.pop()!;
     this.imageEdits.set(prev.imageEdits);
     this.layoutEdits.set(prev.layoutEdits ?? {});
+    this.textEdits.set(prev.textEdits ?? {});
     this.addedImages.set(prev.addedImages);
     this.addedVideos.set(prev.addedVideos);
     this.addedTables.set(prev.addedTables || {});
@@ -660,6 +684,7 @@ export class PdfDesignExtractorComponent {
     const current: HistorySnapshot = {
       imageEdits: structuredClone(this.imageEdits()),
       layoutEdits: structuredClone(this.layoutEdits()),
+      textEdits: structuredClone(this.textEdits()),
       addedImages: structuredClone(this.addedImages()),
       addedVideos: structuredClone(this.addedVideos()),
       addedTables: structuredClone(this.addedTables()),
@@ -669,6 +694,7 @@ export class PdfDesignExtractorComponent {
     const next = this.redoStack.pop()!;
     this.imageEdits.set(next.imageEdits);
     this.layoutEdits.set(next.layoutEdits ?? {});
+    this.textEdits.set(next.textEdits ?? {});
     this.addedImages.set(next.addedImages);
     this.addedVideos.set(next.addedVideos);
     this.addedTables.set(next.addedTables || {});
@@ -681,7 +707,17 @@ export class PdfDesignExtractorComponent {
   }
 
   totalEdits(): number {
-    return 0;
+    const le = this.layoutEdits();
+    const te = this.textEdits();
+    const geom = Object.values(le as LayoutEditsMap).reduce(
+      (s: number, o: Record<string, unknown>) => s + Object.keys(o || {}).length,
+      0,
+    );
+    const content = Object.values(te as TextEditsMap).reduce(
+      (s: number, o: Record<string, unknown>) => s + Object.keys(o || {}).length,
+      0,
+    );
+    return geom + content;
   }
 
   pageHasImageMods(pn: number): boolean {
@@ -802,6 +838,7 @@ export class PdfDesignExtractorComponent {
   }
 
   private async loadPdfFromBuffer(buf: ArrayBuffer): Promise<void> {
+    this.loadedPdfBuf = buf.slice(0);
     const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
     const n = pdf.numPages;
     this.totalPgs.set(n);
@@ -851,6 +888,7 @@ export class PdfDesignExtractorComponent {
         tokens: DesignTokens;
         imageEdits: ImageEditsMap;
         layoutEdits: LayoutEditsMap;
+        textEdits: TextEditsMap;
         addedImages: AddedImagesMap;
         addedVideos: AddedVideosMap;
         addedTables: AddedTablesMap;
@@ -866,6 +904,7 @@ export class PdfDesignExtractorComponent {
       if (Array.isArray(s.proposalSections)) this.proposalSections.set(this.normalizeSections(s.proposalSections));
       if (s.imageEdits) this.imageEdits.set(s.imageEdits);
       if (s.layoutEdits) this.layoutEdits.set(s.layoutEdits);
+      if (s.textEdits) this.textEdits.set(s.textEdits);
       if (s.addedImages) this.addedImages.set(s.addedImages);
       if (s.addedVideos) this.addedVideos.set(s.addedVideos);
       if (s.addedTables) this.addedTables.set(s.addedTables);
@@ -897,6 +936,7 @@ export class PdfDesignExtractorComponent {
       tokens: structuredClone(this.tokens()),
       imageEdits: structuredClone(this.imageEdits()),
       layoutEdits: structuredClone(this.layoutEdits()),
+      textEdits: structuredClone(this.textEdits()),
       addedImages: structuredClone(this.addedImages()),
       addedVideos: structuredClone(this.addedVideos()),
       addedTables: structuredClone(this.addedTables()),
@@ -1101,6 +1141,18 @@ export class PdfDesignExtractorComponent {
       ...prev,
       [pn]: ((prev[pn] || []) as UserTextElement[]).map((b) => (b.id === id ? { ...b, html: innerHtml } : b)),
     }));
+    const m = id.match(/^pdftext_(\d+)_(.+)$/);
+    if (m) {
+      const tPn = Number.parseInt(m[1]!, 10);
+      const textId = m[2]!;
+      this.textEdits.update((prev) => ({
+        ...prev,
+        [tPn]: {
+          ...(prev[tPn] || {}),
+          [textId]: { html: innerHtml, maskOriginal: true },
+        },
+      }));
+    }
     this.selEl.update((prev) =>
       prev?.id === id && prev?.type === 'userText' ? { ...prev, html: innerHtml } : prev,
     );
@@ -1723,13 +1775,14 @@ export class PdfDesignExtractorComponent {
     });
   }
 
-  newDocument(): void {
+  newDocument(): void { 
     this.revokeVideoBlobs(this.addedVideos());
     this.pages.set([]);
     this.templates.set([]);
     this.tokens.set({ colors: [], fonts: [], sizes: [] });
     this.imageEdits.set({});
     this.layoutEdits.set({});
+    this.textEdits.set({});
     this.addedImages.set({});
     this.addedVideos.set({});
     this.addedTables.set({});
@@ -1745,10 +1798,13 @@ export class PdfDesignExtractorComponent {
     const pg = this.pg();
     if (!pg) return [];
     return [
+      ...pg.textElements.filter((t) => !this.textEdits()[pg.pageNum]?.[t.id]?.maskOriginal),
       ...pg.shapes,
       ...pg.images,
       ...(this.addedImages()[pg.pageNum] || []),
       ...(this.addedVideos()[pg.pageNum] || []),
+      ...(this.addedTables()[pg.pageNum] || []),
+      ...(this.addedRichTexts()[pg.pageNum] || []),
     ];
   }
 
@@ -1765,6 +1821,16 @@ export class PdfDesignExtractorComponent {
       ((this.addedRichTexts()[pg.pageNum] || []) as UserTextElement[]).find((b) => b.id === sel.id) ||
       (sel as UserTextElement)
     );
+  }
+
+  pdfTextStyle(rt: UserTextElement): TextStyle | null {
+    const m = rt.id.match(/^pdftext_(\d+)_(.+)$/);
+    if (!m) return null;
+    const pn = Number.parseInt(m[1]!, 10);
+    const textId = m[2]!;
+    const pg = this.pages().find((p) => p.pageNum === pn);
+    const src = pg?.textElements.find((t) => t.id === textId);
+    return src?.style ?? null;
   }
 
   addRichTextBlock(): void {
@@ -1820,6 +1886,7 @@ export class PdfDesignExtractorComponent {
     this.captureBeforeChange();
     this.imageEdits.set({});
     this.layoutEdits.set({});
+    this.textEdits.set({});
     this.addedImages.set({});
     this.addedVideos.set({});
     this.addedTables.set({});
@@ -1977,6 +2044,60 @@ export class PdfDesignExtractorComponent {
       return;
     }
     this.selEl.set(active ? null : el);
+  }
+
+  onOverlayDblClick(e: MouseEvent, el: SelElement): void {
+    if (this.editorMode() !== 'edit') return;
+    if (el.type !== 'text') return;
+    e.stopPropagation();
+    e.preventDefault();
+    this.beginEditPdfText(el as TextElement);
+  }
+
+  private beginEditPdfText(el: TextElement): void {
+    const pg = this.pg();
+    if (!pg) return;
+    const pn = pg.pageNum;
+    const ob = this.overlayBounds(el);
+
+    const existing = this.textEdits()[pn]?.[el.id];
+    if (!existing) this.captureBeforeChange();
+    const html = existing?.html ?? `<p>${this.escapeHtml(el.content || '')}</p>`;
+
+    this.textEdits.update((prev) => ({
+      ...prev,
+      [pn]: {
+        ...(prev[pn] || {}),
+        [el.id]: { html, maskOriginal: true },
+      },
+    }));
+
+    // Represent edited PDF text as a userText block so we can reuse the rich-text editor UI.
+    const rtId = `pdftext_${pn}_${el.id}`;
+    const block: UserTextElement = {
+      id: rtId,
+      type: 'userText',
+      x: ob.x,
+      y: ob.y,
+      w: ob.w,
+      h: ob.h,
+      html,
+      _userAdded: true,
+    };
+
+    this.addedRichTexts.update((prev) => {
+      const list = (prev[pn] || []) as UserTextElement[];
+      const found = list.find((x) => x.id === rtId);
+      return {
+        ...prev,
+        [pn]: found ? list.map((x) => (x.id === rtId ? { ...x, ...block } : x)) : [...list, block],
+      };
+    });
+
+    this.selEl.set(block);
+    this.editorMode.set('edit');
+    this.activeAddTool.set('userText');
+    this.placedTextUndoGate = rtId;
   }
 
   onOverlayEnter(e: MouseEvent, active: boolean, bgTint: string): void {
@@ -2298,6 +2419,174 @@ export class PdfDesignExtractorComponent {
     const secList = sections.map((x) => `<li>${this.escapeHtml(x.title)}</li>`).join('');
     const n = this.pages().length;
     return `<!DOCTYPE html><html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word"><head><meta charset="utf-8"><title>${this.escapeHtml(title)}</title></head><body><h1>${this.escapeHtml(title)}</h1><p>Pages: ${n}</p><h2>Sections</h2><ul>${secList || '<li>(none)</li>'}</ul><p><em>Exported from Proposal Editor. Visual canvas edits are not baked into this file.</em></p></body></html>`;
+  }
+
+  private hexToRgb01(hex: string): { r: number; g: number; b: number } {
+    const m = (hex || '').trim().match(/^#?([0-9a-f]{6})$/i);
+    if (!m) return { r: 1, g: 1, b: 1 };
+    const n = Number.parseInt(m[1]!, 16);
+    const r = ((n >> 16) & 255) / 255;
+    const g = ((n >> 8) & 255) / 255;
+    const b = (n & 255) / 255;
+    return { r, g, b };
+  }
+
+  private htmlToPlainText(html: string): string {
+    const tmp = document.createElement('div');
+    tmp.innerHTML = html || '';
+    return (tmp.textContent || '').replace(/\s+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+  }
+
+  private wrapTextToWidth(
+    text: string,
+    width: number,
+    measure: (s: string) => number,
+  ): string[] {
+    const out: string[] = [];
+    const paras = (text || '').split(/\n+/g);
+    for (const p of paras) {
+      const words = p.trim().split(/\s+/g).filter(Boolean);
+      if (!words.length) {
+        out.push('');
+        continue;
+      }
+      let line = words[0]!;
+      for (let i = 1; i < words.length; i++) {
+        const w = words[i]!;
+        const cand = `${line} ${w}`;
+        if (measure(cand) <= width) line = cand;
+        else {
+          out.push(line);
+          line = w;
+        }
+      }
+      out.push(line);
+    }
+    return out;
+  }
+
+  async exportEditedPdfFile(): Promise<void> {
+    this.closeExportMenu();
+    try {
+      const srcBuf = this.openedPdfId
+        ? await firstValueFrom(this.pdfsApi.getPdfFile(this.openedPdfId))
+        : this.loadedPdfBuf;
+      if (!srcBuf) {
+        alert('No PDF loaded.');
+        return;
+      }
+
+      const { PDFDocument, StandardFonts, rgb } = await import('pdf-lib');
+      const pdfDoc = await PDFDocument.load(srcBuf);
+
+      // Must match the SCALE used in `extractPage()`.
+      const SCALE = 1.5;
+
+      const pages = this.pages();
+      const textEdits = this.textEdits();
+      const layoutEdits = this.layoutEdits();
+      const imageEdits = this.imageEdits();
+      const addedImages = this.addedImages();
+
+      for (const pg of pages) {
+        const page = pdfDoc.getPage(pg.pageNum - 1);
+        const { width: pw, height: ph } = page.getSize();
+        const bg = this.hexToRgb01(pg.bgColor || '#ffffff');
+
+        // 1) Mask + redraw edited text
+        const tMap = textEdits[pg.pageNum] || {};
+        for (const [textId, ed] of Object.entries(tMap)) {
+          if (!ed?.maskOriginal) continue;
+          const src = pg.textElements.find((t) => t.id === textId);
+          if (!src) continue;
+          const le = layoutEdits[pg.pageNum]?.[textId] || {};
+          const x = (le.x ?? src.x) / SCALE;
+          const yTop = (le.y ?? src.y) / SCALE;
+          const w = (le.w ?? src.w) / SCALE;
+          const h = (le.h ?? src.h) / SCALE;
+          const y = ph - yTop - h;
+
+          page.drawRectangle({ x, y, width: w, height: h, color: rgb(bg.r, bg.g, bg.b) });
+
+          const plain = this.htmlToPlainText(ed.html || '');
+          const size = Math.max(6, (src.style.fontSizePx || 12) / SCALE);
+          const isBold = src.style.fontWeight === 'bold';
+          const isItalic = src.style.fontStyle === 'italic';
+          const fontName = isBold
+            ? isItalic
+              ? StandardFonts.HelveticaBoldOblique
+              : StandardFonts.HelveticaBold
+            : isItalic
+              ? StandardFonts.HelveticaOblique
+              : StandardFonts.Helvetica;
+          const font = await pdfDoc.embedFont(fontName);
+
+          const col = this.hexToRgb01(src.style.color || '#0f172a');
+          const pad = Math.max(1, size * 0.12);
+          const lineHeight = size * 1.25;
+          const measure = (s: string) => font.widthOfTextAtSize(s, size);
+          const lines = this.wrapTextToWidth(plain, Math.max(2, w - pad * 2), measure);
+          let ty = y + h - pad - size;
+          for (const line of lines) {
+            if (ty < y + pad) break;
+            page.drawText(line, { x: x + pad, y: ty, size, font, color: rgb(col.r, col.g, col.b) });
+            ty -= lineHeight;
+          }
+        }
+
+        // 2) Mask removed PDF images and draw replacements / user-added images (best-effort)
+        const iMap = imageEdits[pg.pageNum] || {};
+        for (const imgEl of pg.images) {
+          const ed = iMap[imgEl.id];
+          if (!ed?.removed && !ed?.src) continue;
+          const x = imgEl.x / SCALE;
+          const yTop = imgEl.y / SCALE;
+          const w = imgEl.w / SCALE;
+          const h = imgEl.h / SCALE;
+          const y = ph - yTop - h;
+          page.drawRectangle({ x, y, width: w, height: h, color: rgb(bg.r, bg.g, bg.b) });
+        }
+
+        const drawImageDataUrl = async (dataUrl: string, x: number, y: number, w: number, h: number) => {
+          const m = dataUrl.match(/^data:(image\/png|image\/jpeg);base64,(.+)$/);
+          if (!m) return;
+          const mime = m[1]!;
+          const b64 = m[2]!;
+          const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+          const img = mime === 'image/png' ? await pdfDoc.embedPng(bytes) : await pdfDoc.embedJpg(bytes);
+          page.drawImage(img, { x, y, width: w, height: h });
+        };
+
+        for (const imgEl of pg.images) {
+          const ed = iMap[imgEl.id];
+          if (!ed?.src || ed?.removed) continue;
+          const ox = (ed.x ?? imgEl.x) / SCALE;
+          const oyTop = (ed.y ?? imgEl.y) / SCALE;
+          const ow = (ed.w ?? imgEl.w) / SCALE;
+          const oh = (ed.h ?? imgEl.h) / SCALE;
+          const oy = ph - oyTop - oh;
+          await drawImageDataUrl(ed.src, ox, oy, ow, oh);
+        }
+
+        for (const imgEl of addedImages[pg.pageNum] || []) {
+          if (!imgEl.src) continue;
+          const x = imgEl.x / SCALE;
+          const yTop = imgEl.y / SCALE;
+          const w = imgEl.w / SCALE;
+          const h = imgEl.h / SCALE;
+          const y = ph - yTop - h;
+          await drawImageDataUrl(imgEl.src, x, y, w, h);
+        }
+      }
+
+      const bytes = await pdfDoc.save();
+      const ab = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
+      const blob = new Blob([ab], { type: 'application/pdf' });
+      const base = this.sanitizeFilename(this.pdfTitle() || 'proposal');
+      this.downloadBlob(blob, `${base}-edited.pdf`);
+    } catch (e: unknown) {
+      alert('Export failed: ' + (e instanceof Error ? e.message : String(e)));
+    }
   }
 
   async exportPdfFile(): Promise<void> {

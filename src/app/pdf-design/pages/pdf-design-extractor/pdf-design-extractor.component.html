@@ -356,6 +356,18 @@
           " title="Save (also updates PDFs list timestamp)">
         Save
       </button>
+      <button type="button" (click)="exportEditedPdfFile()" style="
+            padding: 10px 14px;
+            background: #0f172a;
+            color: #FFF;
+            border: 1px solid rgba(15,23,42,0.8);
+            border-radius: 5px;
+            font-size: 13px;
+            cursor: pointer;
+            font-weight: 800;
+          " title="Download a new PDF with edits baked in">
+        Export edited PDF
+      </button>
       }
     </div>
 
@@ -465,6 +477,7 @@
                         ? '1.5px solid #6366f1'
                         : 'none'
                   " (click)="onOverlayClick($event, el, placementDrag, active)"
+            (dblclick)="onOverlayDblClick($event, el)"
             (pointerdown)="onPlacementPointerDown($event, el, placementDrag)"
             (pointermove)="onPointerMoveMaybe($event, placementDrag)"
             (pointerup)="onPointerUpMaybe($event, placementDrag)"
@@ -570,59 +583,15 @@
           (pointerup)="onImagePointerUp($event)" (pointercancel)="onImagePointerUp($event)"
           (click)="onPlacedTableClick($event, t, readOnly)">
           @if (!readOnly) {
-          <div style="
-                    height: 35px;
-                    flex-shrink: 0;
-                    touch-action: none;
-                    display: flex;
-                    align-items: center;
-                    justify-content: space-between;
-                    gap: 6px;
-                    user-select: none;
-                    background: linear-gradient(180deg, rgba(42, 172, 184, 0.22), rgba(42, 172, 184, 0.08));
-                    border-bottom: 1px solid rgba(42, 172, 184, 0.35);
-                    padding: 0 6px 0 5px;
-                  ">
-            <div role="presentation" (pointerdown)="$event.stopPropagation(); onImagePointerDown($event, t)"
-              (pointermove)="onImagePointerMove($event)" (pointerup)="onImagePointerUp($event)"
-              (pointercancel)="onImagePointerUp($event)" style="
-                      flex: 1;
-                      min-width: 0;
-                      height: 100%;
-                      display: flex;
-                      align-items: center;
-                      gap: 6px;
-                      font-size: 12px;
-                      font-weight: 600;
-                    " [style.cursor]="draggingImageId() === t.id ? 'grabbing' : 'grab'" title="Table — Drag to move">
-              <span aria-hidden
-                style="letter-spacing: -2px; opacity: 0.7; font-weight: bolder; font-size: 14px;">⋮⋮</span>
-            </div>
-            @if (selected) {
-            <button type="button" title="Remove table" aria-label="Remove table"
-              (pointerdown)="$event.stopPropagation()" (click)="$event.stopPropagation(); removeTableInspector(t)"
-              style="
-                        flex-shrink: 0;
-                        width: 28px;
-                        height: 28px;
-                        padding: 0;
-                        display: flex;
-                        align-items: center;
-                        justify-content: center;
-                        border-radius: 6px;
-                        border: 1px solid rgba(0, 0, 0, 0.1);
-                        background: rgba(255, 255, 255, 0.95);
-                        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-                        color: #64748b;
-                        cursor: pointer;
-                      ">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                stroke-linecap="round" aria-hidden="true">
-                <path d="M18 6L6 18M6 6l12 12" />
-              </svg>
-            </button>
-            }
-          </div>
+          <app-placed-table-header
+            [selected]="selected"
+            [dragging]="draggingImageId() === t.id"
+            (dragPointerDown)="onImagePointerDown($event, t)"
+            (dragPointerMove)="onImagePointerMove($event)"
+            (dragPointerUp)="onImagePointerUp($event)"
+            (dragPointerCancel)="onImagePointerUp($event)"
+            (remove)="removeTableInspector(t)"
+          />
           }
           <div style="flex: 1; min-height: 0; overflow: auto">
             <app-placed-table-grid [rows]="t.rows" [cols]="t.cols" [cells]="t.cells" [readOnly]="readOnly"
@@ -642,17 +611,20 @@
         @for (rt of addedRichTexts()[pgv.pageNum] || []; track rt.id) {
         @let selected = selEl()?.id === rt.id;
         @let readOnly = editorMode() !== 'edit';
+        @let isPdfText = rt.id.startsWith('pdftext_');
+        @let sty = isPdfText ? pdfTextStyle(rt) : null;
         <div style="
                 position: absolute;
                 z-index: 2;
                 overflow: hidden;
                 border-radius: 2px;
-                box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
                 box-sizing: border-box;
-                background: #ffffff;
                 display: flex;
                 flex-direction: column;
-              " [style.left.px]="rt.x" [style.top.px]="rt.y" [style.width.px]="rt.w" [style.height.px]="rt.h"
+              "
+          [style.box-shadow]="isPdfText ? 'none' : '0 1px 3px rgba(15, 23, 42, 0.06)'"
+          [style.background]="isPdfText ? 'transparent' : '#ffffff'"
+          [style.left.px]="rt.x" [style.top.px]="rt.y" [style.width.px]="rt.w" [style.height.px]="rt.h"
           [style.outline]="selected ? '2px solid #2aacb8' : 'none'" title="Text block"
           (mousedown)="onPlacedRichTextMousedown($event, readOnly)" (pointermove)="onImagePointerMove($event)"
           (pointerup)="onImagePointerUp($event)" (pointercancel)="onImagePointerUp($event)"
@@ -715,7 +687,12 @@
             </svg>
           </button>
           }
-          <div style="flex: 1; min-height: 0; overflow: hidden">
+          <div style="flex: 1; min-height: 0; overflow: hidden"
+            [style.font-family]="sty?.fontFamily || null"
+            [style.font-size.px]="sty?.fontSizePx || null"
+            [style.font-weight]="sty?.fontWeight || null"
+            [style.font-style]="sty?.fontStyle || null"
+            [style.color]="sty?.color || null">
             <app-placed-user-text-body [html]="rt.html" [readOnly]="readOnly"
               (htmlChange)="updateUserTextHtml(rt.id, $event)" (focusFirstEdit)="onPlacedUserTextFocus(rt.id)"
               (pointerMove)="onImagePointerMove($event)" (pointerUp)="onImagePointerUp($event)"

@@ -113,6 +113,20 @@ export type LayoutEditsMap = Record<
   Record<string, { x?: number; y?: number; w?: number; h?: number }>
 >;
 
+/** PDF text content overrides (kept separate from geometry overrides). */
+export type TextEditsMap = Record<
+  number,
+  Record<
+    string,
+    {
+      /** HTML rendered in the overlay editor. */
+      html: string;
+      /** When true, the original PDF text is visually masked. */
+      maskOriginal?: boolean;
+    }
+  >
+>;
+
 export type ResizeHandleId = 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w';
 export type AddedImagesMap = Record<number, ImageElement[]>;
 export type AddedVideosMap = Record<number, VideoElement[]>;
@@ -153,6 +167,7 @@ export interface ProposalSection {
 export interface HistorySnapshot {
   imageEdits: ImageEditsMap;
   layoutEdits: LayoutEditsMap;
+  textEdits: TextEditsMap;
   addedImages: AddedImagesMap;
   addedVideos: AddedVideosMap;
   addedTables: AddedTablesMap;

@@ -1,0 +1,74 @@
+<div style="
+      height: 35px;
+      flex-shrink: 0;
+      touch-action: none;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+      user-select: none;
+      background: linear-gradient(180deg, rgba(42, 172, 184, 0.22), rgba(42, 172, 184, 0.08));
+      border-bottom: 1px solid rgba(42, 172, 184, 0.35);
+      padding: 0 6px 0 5px;
+    ">
+  <div
+    role="presentation"
+    (pointerdown)="onDragPointerDown($event)"
+    (pointermove)="onDragPointerMove($event)"
+    (pointerup)="onDragPointerUp($event)"
+    (pointercancel)="onDragPointerCancel($event)"
+    style="
+      flex: 1;
+      min-width: 0;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      font-weight: 600;
+    "
+    [style.cursor]="dragging() ? 'grabbing' : 'grab'"
+    title="Table — Drag to move"
+  >
+    <span aria-hidden style="letter-spacing: -2px; opacity: 0.7; font-weight: bolder; font-size: 14px;">⋮⋮</span>
+  </div>
+
+  @if (selected()) {
+    <button
+      type="button"
+      title="Remove table"
+      aria-label="Remove table"
+      (pointerdown)="$event.stopPropagation()"
+      (click)="onRemoveClick($event)"
+      style="
+        flex-shrink: 0;
+        width: 28px;
+        height: 28px;
+        padding: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 6px;
+        border: 1px solid rgba(0, 0, 0, 0.1);
+        background: rgba(255, 255, 255, 0.95);
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        color: #64748b;
+        cursor: pointer;
+      "
+    >
+      <svg
+        width="14"
+        height="14"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        aria-hidden="true"
+      >
+        <path d="M18 6L6 18M6 6l12 12" />
+      </svg>
+    </button>
+  }
+</div>
+
