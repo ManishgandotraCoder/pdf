@@ -150,6 +150,7 @@ export class PdfDesignExtractorComponent {
   readonly addedRichTexts = signal<AddedRichTextsMap>({});
   readonly userTextHasSelection = signal<Record<string, boolean>>({});
   readonly userTextHasFocus = signal<Record<string, boolean>>({});
+  readonly pageListMenu = signal<{ x: number; y: number; idx: number; pageNum: number } | null>(null);
   readonly cropModal = signal<CropModalState | null>(null);
   readonly templates = signal<TemplateCluster[]>([]);
   readonly tokens = signal<DesignTokens>({ colors: [], fonts: [], sizes: [] });
@@ -274,6 +275,14 @@ export class PdfDesignExtractorComponent {
       this.revokeVideoBlobs(this.addedVideos());
     });
 
+    if (typeof document !== 'undefined') {
+      const close = () => this.pageListMenu.set(null);
+      document.addEventListener('click', close, { capture: true } as any);
+      this.destroyRef.onDestroy(() => {
+        document.removeEventListener('click', close, { capture: true } as any);
+      });
+    }
+
     effect((onCleanup) => {
       let cancelled = false;
       onCleanup(() => {
@@ -362,6 +371,122 @@ export class PdfDesignExtractorComponent {
     };
     this.w.addEventListener('keydown', onKey);
     this.destroyRef.onDestroy(() => this.w.removeEventListener('keydown', onKey));
+  }
+
+  openPageListMenu(e: MouseEvent, idx: number, pageNum: number): void {
+    e.preventDefault();
+    e.stopPropagation();
+    this.pageListMenu.set({ x: e.clientX, y: e.clientY, idx, pageNum });
+  }
+
+  closePageListMenu(): void {
+    this.pageListMenu.set(null);
+  }
+
+  addPageAfterIndex(idx: number): void {
+    const pages = this.pages();
+    if (!pages.length) return;
+    const refPg = pages[idx] || pages[this.selPage()] || pages[0];
+    if (!refPg) return;
+    this.captureBeforeChange();
+
+    const W = refPg.width;
+    const H = refPg.height;
+    const insertIdx = Math.min(Math.max(0, idx + 1), pages.length);
+    const insert1Based = insertIdx + 1;
+    const blank = createBlankPageData(W, H, refPg.bgColor);
+
+    const newPages = [...pages.slice(0, insertIdx), blank, ...pages.slice(insertIdx)].map((p, i) => ({
+      ...p,
+      pageNum: i + 1,
+    }));
+    this.pages.set(newPages);
+    this.templates.set(clusterTemplates(newPages));
+    this.imageEdits.update((prev) => remapPageKeyedStateInsert(prev, insert1Based));
+    this.layoutEdits.update((prev) => remapPageKeyedStateInsert(prev, insert1Based));
+    this.textEdits.update((prev) => remapPageKeyedStateInsert(prev, insert1Based));
+    this.addedImages.update((prev) => remapPageKeyedStateInsert(prev, insert1Based));
+    this.addedVideos.update((prev) => remapPageKeyedStateInsert(prev, insert1Based));
+    this.addedTables.update((prev) => remapPageKeyedStateInsert(prev, insert1Based));
+    this.addedRichTexts.update((prev) => remapPageKeyedStateInsert(prev, insert1Based));
+    this.pageLayout.update((prev) => [
+      ...prev.slice(0, insertIdx),
+      { kind: 'blank', width: W, height: H, bgColor: refPg.bgColor },
+      ...prev.slice(insertIdx),
+    ]);
+    this.selEl.set(null);
+    this.selPage.set(insertIdx);
+  }
+
+  copyPageAfterIndex(idx: number): void {
+    const pages = this.pages();
+    if (!pages.length) return;
+    const src = pages[idx];
+    if (!src) return;
+    this.captureBeforeChange();
+
+    const insertIdx = Math.min(Math.max(0, idx + 1), pages.length);
+    const insert1Based = insertIdx + 1;
+    const srcPn = src.pageNum;
+    const newPn = srcPn + 1;
+
+    const clonedPage = structuredClone(src);
+    const newPages = [...pages.slice(0, insertIdx), clonedPage, ...pages.slice(insertIdx)].map((p, i) => ({
+      ...p,
+      pageNum: i + 1,
+    }));
+    this.pages.set(newPages);
+    this.templates.set(clusterTemplates(newPages));
+
+    this.imageEdits.update((prev) => {
+      const shifted = remapPageKeyedStateInsert(prev, insert1Based);
+      const srcRow = shifted[srcPn];
+      if (!srcRow) return shifted;
+      return { ...shifted, [newPn]: structuredClone(srcRow) };
+    });
+    this.layoutEdits.update((prev) => {
+      const shifted = remapPageKeyedStateInsert(prev, insert1Based);
+      const srcRow = shifted[srcPn];
+      if (!srcRow) return shifted;
+      return { ...shifted, [newPn]: structuredClone(srcRow) };
+    });
+    this.textEdits.update((prev) => {
+      const shifted = remapPageKeyedStateInsert(prev, insert1Based);
+      const srcRow = shifted[srcPn];
+      if (!srcRow) return shifted;
+      return { ...shifted, [newPn]: structuredClone(srcRow) };
+    });
+    this.addedImages.update((prev) => {
+      const shifted = remapPageKeyedStateInsert(prev, insert1Based);
+      const srcRow = shifted[srcPn];
+      if (!srcRow) return shifted;
+      return { ...shifted, [newPn]: structuredClone(srcRow) };
+    });
+    this.addedVideos.update((prev) => {
+      const shifted = remapPageKeyedStateInsert(prev, insert1Based);
+      const srcRow = shifted[srcPn];
+      if (!srcRow) return shifted;
+      return { ...shifted, [newPn]: structuredClone(srcRow) };
+    });
+    this.addedTables.update((prev) => {
+      const shifted = remapPageKeyedStateInsert(prev, insert1Based);
+      const srcRow = shifted[srcPn];
+      if (!srcRow) return shifted;
+      return { ...shifted, [newPn]: structuredClone(srcRow) };
+    });
+    this.addedRichTexts.update((prev) => {
+      const shifted = remapPageKeyedStateInsert(prev, insert1Based);
+      const srcRow = shifted[srcPn];
+      if (!srcRow) return shifted;
+      return { ...shifted, [newPn]: structuredClone(srcRow) };
+    });
+    this.pageLayout.update((prev) => {
+      const srcEntry = prev[idx];
+      if (!srcEntry) return prev;
+      return [...prev.slice(0, insertIdx), structuredClone(srcEntry), ...prev.slice(insertIdx)];
+    });
+    this.selEl.set(null);
+    this.selPage.set(insertIdx);
   }
 
   private revokeVideoBlobs(map: AddedVideosMap): void {
@@ -902,8 +1027,21 @@ export class PdfDesignExtractorComponent {
     if (delPn === undefined) return;
     if (!confirm(`Delete page ${delPn}? You can use Undo (⌘Z / Ctrl+Z) to restore.`)) return;
     this.captureBeforeChange();
+    // Only revoke blob URLs that are not referenced by other pages.
+    const otherVideoSrcs = new Set<string>();
+    for (const [pnStr, list] of Object.entries(this.addedVideos() as AddedVideosMap)) {
+      const pn = Number(pnStr);
+      if (!Number.isFinite(pn) || pn === delPn) continue;
+      for (const v of (list || []) as VideoElement[]) {
+        if (typeof v?.src === 'string' && v.src) otherVideoSrcs.add(v.src);
+      }
+    }
     ((this.addedVideos()[delPn] || []) as VideoElement[]).forEach((v: VideoElement) => {
-      if (v?.src?.startsWith('blob:')) URL.revokeObjectURL(v.src);
+      const src = v?.src;
+      if (typeof src !== 'string') return;
+      if (!src.startsWith('blob:')) return;
+      if (otherVideoSrcs.has(src)) return;
+      URL.revokeObjectURL(src);
     });
     const n = pages.length;
     const newPages = pages.filter((_, i) => i !== delIdx).map((p, i) => ({ ...p, pageNum: i + 1 }));
@@ -911,6 +1049,7 @@ export class PdfDesignExtractorComponent {
     this.templates.set(clusterTemplates(newPages));
     this.imageEdits.update((prev) => remapPageKeyedState(prev, delPn));
     this.layoutEdits.update((prev) => remapPageKeyedState(prev, delPn));
+    this.textEdits.update((prev) => remapPageKeyedState(prev, delPn));
     this.addedImages.update((prev) => remapPageKeyedState(prev, delPn));
     this.addedVideos.update((prev) => remapPageKeyedState(prev, delPn));
     this.addedTables.update((prev) => remapPageKeyedState(prev, delPn));
@@ -925,34 +1064,7 @@ export class PdfDesignExtractorComponent {
   }
 
   addPageAfterCurrent(): void {
-    const pages = this.pages();
-    if (!pages.length) return;
-    this.captureBeforeChange();
-    const refPg = pages[this.selPage()] || pages[0];
-    const W = refPg.width;
-    const H = refPg.height;
-    const insertIdx = this.selPage() + 1;
-    const insert1Based = insertIdx + 1;
-    const blank = createBlankPageData(W, H, refPg.bgColor);
-    const newPages = [...pages.slice(0, insertIdx), blank, ...pages.slice(insertIdx)].map((p, i) => ({
-      ...p,
-      pageNum: i + 1,
-    }));
-    this.pages.set(newPages);
-    this.templates.set(clusterTemplates(newPages));
-    this.imageEdits.update((prev) => remapPageKeyedStateInsert(prev, insert1Based));
-    this.layoutEdits.update((prev) => remapPageKeyedStateInsert(prev, insert1Based));
-    this.addedImages.update((prev) => remapPageKeyedStateInsert(prev, insert1Based));
-    this.addedVideos.update((prev) => remapPageKeyedStateInsert(prev, insert1Based));
-    this.addedTables.update((prev) => remapPageKeyedStateInsert(prev, insert1Based));
-    this.addedRichTexts.update((prev) => remapPageKeyedStateInsert(prev, insert1Based));
-    this.pageLayout.update((prev) => [
-      ...prev.slice(0, insertIdx),
-      { kind: 'blank', width: W, height: H, bgColor: refPg.bgColor },
-      ...prev.slice(insertIdx),
-    ]);
-    this.selEl.set(null);
-    this.selPage.set(insertIdx);
+    this.addPageAfterIndex(this.selPage());
   }
 
   async handleUpload(file: File): Promise<void> {

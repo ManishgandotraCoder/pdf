@@ -184,15 +184,19 @@
           [class.sidebar__page-card--collapsed]="leftSidebarCollapsed()"
           (click)="selPage.set(idx); selEl.set(null); setActiveSectionFromPage()"
           [style.border-color]="idx === selPage() ? '#2aacb8' : 'transparent'"
+          style="position: relative"
         >
-          <button type="button" [title]="pages().length <= 1 ? 'Cannot delete the only page' : 'Delete page ' + p.pageNum"
-            [attr.aria-label]="'Delete page ' + p.pageNum" (click)="$event.stopPropagation(); deletePageAtIndex(idx)"
-            [disabled]="pages().length <= 1" class="sidebar__page-delete"
-            [style.color]="pages().length <= 1 ? '#cbd5e1' : '#b91c1c'"
-            [style.cursor]="pages().length <= 1 ? 'not-allowed' : 'pointer'">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-              stroke-linecap="round" aria-hidden="true">
-              <path d="M18 6L6 18M6 6l12 12" />
+          <button
+            type="button"
+            title="Page options"
+            aria-label="Page actions"
+            (click)="$event.stopPropagation(); openPageListMenu($event, idx, p.pageNum)"
+            class="sidebar__page-actions"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <circle cx="12" cy="5.5" r="1.7" />
+              <circle cx="12" cy="12" r="1.7" />
+              <circle cx="12" cy="18.5" r="1.7" />
             </svg>
           </button>
           <img [src]="p.thumbUrl" class="sidebar__page-thumb" [alt]="'p' + p.pageNum" />
@@ -205,6 +209,32 @@
         </div>
         }
       </div>
+
+      @if (pageListMenu(); as m) {
+      <div (click)="closePageListMenu()" style="position: fixed; inset: 0; z-index: 1000;"></div>
+      <div
+        (click)="$event.stopPropagation()"
+        style="position: fixed; z-index: 1001; min-width: 190px; padding: 8px; border-radius: 12px; background: #ffffff; border: 1px solid rgba(15,23,42,0.12); box-shadow: 0 16px 34px rgba(15,23,42,0.18); color: #0f172a;"
+        [style.left.px]="m.x"
+        [style.top.px]="m.y"
+      >
+        <div style="font-size: 10px; font-weight: 900; letter-spacing: 0.08em; color: #94a3b8; text-transform: uppercase; padding: 6px 8px 8px;">
+          Page {{ m.pageNum }}
+        </div>
+        <button type="button" (click)="closePageListMenu(); addPageAfterIndex(m.idx)"
+          style="width: 100%; text-align: left; padding: 9px 10px; border-radius: 10px; border: none; background: transparent; cursor: pointer; font-size: 12px; font-weight: 800;">
+          Add page 
+        </button>
+        <button type="button" (click)="closePageListMenu(); copyPageAfterIndex(m.idx)"
+          style="width: 100%; text-align: left; padding: 9px 10px; border-radius: 10px; border: none; background: transparent; cursor: pointer; font-size: 12px; font-weight: 800;">
+          Copy page
+        </button>
+        <button type="button" (click)="closePageListMenu(); deletePageAtIndex(m.idx)"
+          style="width: 100%; text-align: left; padding: 9px 10px; border-radius: 10px; border: none; background: rgba(185,28,28,0.06); cursor: pointer; font-size: 12px; font-weight: 900; color: #b91c1c;">
+          Delete page
+        </button>
+      </div>
+      }
     </div>
   </div>
 
