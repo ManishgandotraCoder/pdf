@@ -1,256 +1,372 @@
-<div data-rich-toolbar class="rich-text-toolbar-wrap">
-  <fieldset class="rt-toolbar__group">
-    <legend class="rt-toolbar__legend">Font</legend>
-    <app-select-field
-      class="rt-select"
-      ariaLabel="Font"
-      placeholder="Font…"
-      [disabled]="disabled()"
-      [options]="fontsForSelect()"
-      [value]="fontSelectModel()"
-      (valueChange)="onFontValueChange($event)"
-    />
-    <input
-      type="text"
-      inputmode="numeric"
-      class="rt-size-input"
-      title="Font size (px) — type any value"
-      [disabled]="disabled()"
-      [value]="sizeInputModel()"
-      (focus)="onSizeInputFocus()"
-      (input)="onSizeInput($event)"
-      (keydown)="onSizeInputKeydown($event)"
-      (blur)="onSizeInputBlur()"
-      (change)="onSizeInputCommit($event)"
-      (mousedown)="$event.stopPropagation()"
-    />
-    @if (selectionFontLabel()) {
-      <span class="rt-toolbar-current" [title]="selectionFontLabel() + ' · ' + (selectionSizePx() ?? '?') + 'px'">
-        {{ selectionFontLabel() }} · {{ selectionSizePx() ?? '—' }}px
-      </span>
-    }
-  </fieldset>
-
-  <fieldset class="rt-toolbar__group">
-    <legend class="rt-toolbar__legend">Text style</legend>
-    <button
-      type="button"
-      class="rt-btn rt-btn--bi"
-      title="Bold"
-      [disabled]="disabled()"
-      (mousedown)="$event.preventDefault()"
-      (click)="$event.preventDefault(); exec('bold')"
-    >
-      B
-    </button>
-    <button
-      type="button"
-      class="rt-btn rt-btn--italic"
-      title="Italic"
-      [disabled]="disabled()"
-      (mousedown)="$event.preventDefault()"
-      (click)="$event.preventDefault(); exec('italic')"
-    >
-      I
-    </button>
-    <button
-      type="button"
-      class="rt-btn rt-btn--underline"
-      title="Underline"
-      [disabled]="disabled()"
-      (mousedown)="$event.preventDefault()"
-      (click)="$event.preventDefault(); exec('underline')"
-    >
-      U
-    </button>
-  </fieldset>
-
-  <fieldset class="rt-toolbar__group">
-    <legend class="rt-toolbar__legend">Colors</legend>
-    <label class="rt-swatch-label">
-      <span class="rt-swatch-label__text">A</span>
-      <input
-        type="color"
-        class="rt-color-input"
-        title="Text color"
+<div
+  data-rich-toolbar
+  class="rich-text-toolbar-wrap"
+  [class.rich-text-toolbar-wrap--collapsed]="toolbarCollapsed()"
+>
+  <div class="rt-toolbar__row rt-toolbar__row--main" [class.rt-toolbar__row--hidden]="toolbarCollapsed()">
+    <!-- History & view -->
+    <div class="rt-toolbar__section" role="group" aria-label="Undo and view">
+      @if (showEditClaude()) {
+      <button
+        type="button"
+        class="rt-icon-btn"
+        title="Edit with Claude (analyze this page, unlock text blocks)"
+        [disabled]="disabled() || claudePending()"
+        (mousedown)="$event.preventDefault()"
+        (click)="$event.preventDefault(); onEditWithClaude()"
+      >
+        <svg class="rt-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M12 20h9" />
+          <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+        </svg>
+      </button>
+      }
+      <button
+        type="button"
+        class="rt-icon-btn"
+        title="Undo"
         [disabled]="disabled()"
         (mousedown)="$event.preventDefault()"
-        (change)="onForeColor($event)"
-        [style.cursor]="disabled() ? 'not-allowed' : 'pointer'"
-      />
-    </label>
-    <label class="rt-swatch-label">
-      <span class="rt-swatch-label__text">Bg</span>
-      <input
-        type="color"
-        class="rt-color-input"
-        title="Background"
+        (click)="$event.preventDefault(); undo()"
+      >
+        <svg class="rt-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M3 7v6h6" />
+          <path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13" />
+        </svg>
+      </button>
+      <button
+        type="button"
+        class="rt-icon-btn"
+        title="Redo"
         [disabled]="disabled()"
         (mousedown)="$event.preventDefault()"
-        (change)="onBackColor($event)"
-        [style.cursor]="disabled() ? 'not-allowed' : 'pointer'"
-      />
-    </label>
-    <label class="rt-swatch-label">
-      <span class="rt-swatch-label__text">Hi</span>
-      <input
-        type="color"
-        class="rt-color-input"
-        title="Highlight"
+        (click)="$event.preventDefault(); redo()"
+      >
+        <svg class="rt-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M21 7v6h-6" />
+          <path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3L21 13" />
+        </svg>
+      </button>
+      <button
+        type="button"
+        class="rt-icon-btn"
+        title="Print"
         [disabled]="disabled()"
         (mousedown)="$event.preventDefault()"
-        (change)="onHilite($event)"
-        [style.cursor]="disabled() ? 'not-allowed' : 'pointer'"
+        (click)="$event.preventDefault(); printPage()"
+      >
+        <svg class="rt-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M6 9V2h12v7" />
+          <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
+          <rect x="6" y="14" width="12" height="8" rx="1" />
+        </svg>
+      </button>
+      @if (pageZoom() != null) {
+        <app-select-field
+          class="rt-select rt-select--docs rt-select--zoom"
+          ariaLabel="Page zoom"
+          [disabled]="disabled()"
+          [options]="zoomStrOptions()"
+          [value]="zoomSelectModel()"
+          (valueChange)="onPageZoomStringChange($any($event))"
+        />
+      }
+    </div>
+
+    <span class="rt-sep" aria-hidden="true"></span>
+
+    <div class="rt-toolbar__section" role="group" aria-label="Paragraph style">
+      <app-select-field
+        class="rt-select rt-select--docs rt-select--style"
+        ariaLabel="Paragraph style"
+        [disabled]="disabled()"
+        [options]="paragraphOptions()"
+        [value]="paragraphFormat()"
+        (valueChange)="onParagraphFormatChange($any($event))"
       />
-    </label>
-  </fieldset>
+    </div>
 
-  <fieldset class="rt-toolbar__group">
-    <legend class="rt-toolbar__legend">Insert</legend>
-    <button
-      type="button"
-      class="rt-btn rt-btn--with-icon"
-      title="Insert link"
-      [disabled]="disabled()"
-      (mousedown)="$event.preventDefault()"
-      (click)="$event.preventDefault(); link()"
-    >
-      <svg class="rt-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
-        <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
-        <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
-      </svg>
-      <span>Link</span>
-    </button>
-  </fieldset>
+    <span class="rt-sep" aria-hidden="true"></span>
 
-  <fieldset class="rt-toolbar__group">
-    <legend class="rt-toolbar__legend">Alignment</legend>
-    <button
-      type="button"
-      class="rt-btn rt-btn--icon"
-      title="Align left"
-      [disabled]="disabled()"
-      (mousedown)="$event.preventDefault()"
-      (click)="$event.preventDefault(); exec('justifyLeft')"
-    >
-      <svg class="rt-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
-        <line x1="4" y1="6" x2="20" y2="6" />
-        <line x1="4" y1="12" x2="14" y2="12" />
-        <line x1="4" y1="18" x2="20" y2="18" />
-      </svg>
-    </button>
-    <button
-      type="button"
-      class="rt-btn rt-btn--icon"
-      title="Align center"
-      [disabled]="disabled()"
-      (mousedown)="$event.preventDefault()"
-      (click)="$event.preventDefault(); exec('justifyCenter')"
-    >
-      <svg class="rt-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
-        <line x1="4" y1="6" x2="20" y2="6" />
-        <line x1="7" y1="12" x2="17" y2="12" />
-        <line x1="4" y1="18" x2="20" y2="18" />
-      </svg>
-    </button>
-    <button
-      type="button"
-      class="rt-btn rt-btn--icon"
-      title="Align right"
-      [disabled]="disabled()"
-      (mousedown)="$event.preventDefault()"
-      (click)="$event.preventDefault(); exec('justifyRight')"
-    >
-      <svg class="rt-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
-        <line x1="4" y1="6" x2="20" y2="6" />
-        <line x1="10" y1="12" x2="20" y2="12" />
-        <line x1="4" y1="18" x2="20" y2="18" />
-      </svg>
-    </button>
-    <button
-      type="button"
-      class="rt-btn rt-btn--icon"
-      title="Justify"
-      [disabled]="disabled()"
-      (mousedown)="$event.preventDefault()"
-      (click)="$event.preventDefault(); exec('justifyFull')"
-    >
-      <svg class="rt-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
-        <line x1="4" y1="6" x2="20" y2="6" />
-        <line x1="4" y1="12" x2="20" y2="12" />
-        <line x1="4" y1="18" x2="20" y2="18" />
-      </svg>
-    </button>
-  </fieldset>
+    <div class="rt-toolbar__section" role="group" aria-label="Font">
+      <app-select-field
+        class="rt-select rt-select--docs rt-select--font"
+        ariaLabel="Font"
+        placeholder="Font"
+        [disabled]="disabled()"
+        [options]="fontsForSelect()"
+        [value]="fontSelectModel()"
+        (valueChange)="onFontValueChange($event)"
+      />
+    </div>
 
-  <fieldset class="rt-toolbar__group">
-    <legend class="rt-toolbar__legend">Indent</legend>
-    <button
-      type="button"
-      class="rt-btn rt-btn--icon"
-      title="Outdent"
-      [disabled]="disabled()"
-      (mousedown)="$event.preventDefault()"
-      (click)="$event.preventDefault(); exec('outdent')"
-    >
-      <svg class="rt-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <line x1="9" y1="6" x2="20" y2="6" />
-        <line x1="5" y1="12" x2="20" y2="12" />
-        <line x1="9" y1="18" x2="20" y2="18" />
-        <polyline points="3 8 7 12 3 16" />
-      </svg>
-    </button>
-    <button
-      type="button"
-      class="rt-btn rt-btn--icon"
-      title="Indent"
-      [disabled]="disabled()"
-      (mousedown)="$event.preventDefault()"
-      (click)="$event.preventDefault(); exec('indent')"
-    >
-      <svg class="rt-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <line x1="4" y1="6" x2="15" y2="6" />
-        <line x1="9" y1="12" x2="20" y2="12" />
-        <line x1="4" y1="18" x2="15" y2="18" />
-        <polyline points="21 8 17 12 21 16" />
-      </svg>
-    </button>
-  </fieldset>
+    <span class="rt-sep" aria-hidden="true"></span>
 
-  <fieldset class="rt-toolbar__group">
-    <legend class="rt-toolbar__legend">Lists</legend>
-    <button
-      type="button"
-      class="rt-btn rt-btn--icon"
-      title="Bullet list"
-      [disabled]="disabled()"
-      (mousedown)="$event.preventDefault()"
-      (click)="$event.preventDefault(); execList(false)"
-    >
-      <svg class="rt-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
-        <line x1="9" y1="6" x2="20" y2="6" />
-        <line x1="9" y1="12" x2="20" y2="12" />
-        <line x1="9" y1="18" x2="20" y2="18" />
-        <circle cx="5" cy="6" r="1.25" fill="currentColor" stroke="none" />
-        <circle cx="5" cy="12" r="1.25" fill="currentColor" stroke="none" />
-        <circle cx="5" cy="18" r="1.25" fill="currentColor" stroke="none" />
-      </svg>
-    </button>
-    <button
-      type="button"
-      class="rt-btn rt-btn--icon"
-      title="Numbered list"
-      [disabled]="disabled()"
-      (mousedown)="$event.preventDefault()"
-      (click)="$event.preventDefault(); execList(true)"
-    >
-      <svg class="rt-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <line x1="10" y1="6" x2="20" y2="6" />
-        <line x1="10" y1="12" x2="20" y2="12" />
-        <line x1="10" y1="18" x2="20" y2="18" />
-        <path d="M5 17h2a2 2 0 1 0 0-4H5v8" />
-        <path d="M5 5h2v4H5M4 9h2" />
-      </svg>
-    </button>
-  </fieldset>
+    <div class="rt-toolbar__section rt-toolbar__section--size" role="group" aria-label="Font size">
+      <button
+        type="button"
+        class="rt-size-step"
+        title="Decrease font size"
+        [disabled]="disabled()"
+        (mousedown)="$event.preventDefault()"
+        (click)="$event.preventDefault(); bumpSize(-1)"
+      >
+        −
+      </button>
+      <input
+        type="text"
+        inputmode="decimal"
+        class="rt-size-box"
+        title="Font size (px)"
+        [disabled]="disabled()"
+        [value]="sizeInputModel()"
+        (focus)="onSizeInputFocus()"
+        (input)="onSizeInput($event)"
+        (keydown)="onSizeInputKeydown($event)"
+        (blur)="onSizeInputBlur()"
+        (change)="onSizeInputCommit($event)"
+        (mousedown)="$event.stopPropagation()"
+      />
+      <button
+        type="button"
+        class="rt-size-step"
+        title="Increase font size"
+        [disabled]="disabled()"
+        (mousedown)="$event.preventDefault()"
+        (click)="$event.preventDefault(); bumpSize(1)"
+      >
+        +
+      </button>
+    </div>
+
+    <span class="rt-sep" aria-hidden="true"></span>
+
+    <div class="rt-toolbar__section" role="group" aria-label="Text formatting">
+      <button
+        type="button"
+        class="rt-txt-btn"
+        [class.rt-txt-btn--on]="activeBold()"
+        title="Bold"
+        [disabled]="disabled()"
+        (mousedown)="$event.preventDefault()"
+        (click)="$event.preventDefault(); exec('bold')"
+      >
+        B
+      </button>
+      <button
+        type="button"
+        class="rt-txt-btn rt-txt-btn--italic"
+        [class.rt-txt-btn--on]="activeItalic()"
+        title="Italic"
+        [disabled]="disabled()"
+        (mousedown)="$event.preventDefault()"
+        (click)="$event.preventDefault(); exec('italic')"
+      >
+        I
+      </button>
+      <button
+        type="button"
+        class="rt-txt-btn rt-txt-btn--ul"
+        [class.rt-txt-btn--on]="activeUnderline()"
+        title="Underline"
+        [disabled]="disabled()"
+        (mousedown)="$event.preventDefault()"
+        (click)="$event.preventDefault(); exec('underline')"
+      >
+        U
+      </button>
+      <label class="rt-fore-swatch" title="Text color">
+        <span class="rt-fore-swatch__a">A</span>
+        <input
+          type="color"
+          class="rt-fore-swatch__input"
+          [disabled]="disabled()"
+          (mousedown)="$event.preventDefault()"
+          (change)="onForeColor($event)"
+        />
+      </label>
+      <label class="rt-hi-swatch" title="Highlight color">
+        <svg class="rt-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <path d="M12 19l7-7 3 3-7 7-3-3z" />
+          <path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z" />
+          <path d="M2 2l7.5 1.5" />
+        </svg>
+        <input
+          type="color"
+          class="rt-hi-swatch__input"
+          [disabled]="disabled()"
+          (mousedown)="$event.preventDefault()"
+          (change)="onHilite($event)"
+        />
+      </label>
+    </div>
+
+    <span class="rt-sep" aria-hidden="true"></span>
+
+    <div class="rt-toolbar__section" role="group" aria-label="Insert">
+      <button
+        type="button"
+        class="rt-icon-btn"
+        title="Insert link"
+        [disabled]="disabled()"
+        (mousedown)="$event.preventDefault()"
+        (click)="$event.preventDefault(); link()"
+      >
+        <svg class="rt-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+          <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+          <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+        </svg>
+      </button>
+      <button
+        type="button"
+        class="rt-icon-btn"
+        title="Insert image"
+        [disabled]="disabled()"
+        (mousedown)="$event.preventDefault()"
+        (click)="$event.preventDefault(); image()"
+      >
+        <svg class="rt-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <rect x="3" y="3" width="18" height="18" rx="2" />
+          <circle cx="8.5" cy="8.5" r="1.5" />
+          <path d="M21 15l-5-5L5 21" />
+        </svg>
+      </button>
+    </div>
+
+    <span class="rt-sep" aria-hidden="true"></span>
+
+    <div class="rt-toolbar__section" role="group" aria-label="Alignment and line spacing">
+      <app-select-field
+        class="rt-select rt-select--docs rt-select--align"
+        ariaLabel="Text alignment"
+        [disabled]="disabled()"
+        [options]="alignOptions()"
+        [value]="alignValue()"
+        (valueChange)="onAlignChange($any($event))"
+      />
+      <app-select-field
+        class="rt-select rt-select--docs rt-select--linesp"
+        ariaLabel="Line spacing"
+        [disabled]="disabled()"
+        [options]="lineSpaceOptions()"
+        [value]="lineSpaceKey()"
+        (valueChange)="onLineSpaceChange($any($event))"
+      />
+    </div>
+
+    <span class="rt-sep" aria-hidden="true"></span>
+
+    <div class="rt-toolbar__section" role="group" aria-label="Lists and indent">
+      <button
+        type="button"
+        class="rt-icon-btn"
+        title="Bulleted list"
+        [disabled]="disabled()"
+        (mousedown)="$event.preventDefault()"
+        (click)="$event.preventDefault(); execList(false)"
+      >
+        <svg class="rt-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+          <line x1="9" y1="6" x2="20" y2="6" />
+          <line x1="9" y1="12" x2="20" y2="12" />
+          <line x1="9" y1="18" x2="20" y2="18" />
+          <circle cx="5" cy="6" r="1.25" fill="currentColor" stroke="none" />
+          <circle cx="5" cy="12" r="1.25" fill="currentColor" stroke="none" />
+          <circle cx="5" cy="18" r="1.25" fill="currentColor" stroke="none" />
+        </svg>
+      </button>
+      <button
+        type="button"
+        class="rt-icon-btn"
+        title="Numbered list"
+        [disabled]="disabled()"
+        (mousedown)="$event.preventDefault()"
+        (click)="$event.preventDefault(); execList(true)"
+      >
+        <svg class="rt-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <line x1="10" y1="6" x2="20" y2="6" />
+          <line x1="10" y1="12" x2="20" y2="12" />
+          <line x1="10" y1="18" x2="20" y2="18" />
+          <path d="M5 17h2a2 2 0 1 0 0-4H5v8" />
+          <path d="M5 5h2v4H5M4 9h2" />
+        </svg>
+      </button>
+      <button
+        type="button"
+        class="rt-icon-btn"
+        title="Outdent"
+        [disabled]="disabled()"
+        (mousedown)="$event.preventDefault()"
+        (click)="$event.preventDefault(); exec('outdent')"
+      >
+        <svg class="rt-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <line x1="9" y1="6" x2="20" y2="6" />
+          <line x1="5" y1="12" x2="20" y2="12" />
+          <line x1="9" y1="18" x2="20" y2="18" />
+          <polyline points="3 8 7 12 3 16" />
+        </svg>
+      </button>
+      <button
+        type="button"
+        class="rt-icon-btn"
+        title="Indent"
+        [disabled]="disabled()"
+        (mousedown)="$event.preventDefault()"
+        (click)="$event.preventDefault(); exec('indent')"
+      >
+        <svg class="rt-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <line x1="4" y1="6" x2="15" y2="6" />
+          <line x1="9" y1="12" x2="20" y2="12" />
+          <line x1="4" y1="18" x2="15" y2="18" />
+          <polyline points="21 8 17 12 21 16" />
+        </svg>
+      </button>
+      <button
+        type="button"
+        class="rt-icon-btn"
+        title="Clear formatting"
+        [disabled]="disabled()"
+        (mousedown)="$event.preventDefault()"
+        (click)="$event.preventDefault(); clearFormat()"
+      >
+        <svg class="rt-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M4 4h8l4 8H8M8 4v16" />
+          <line x1="14" y1="3" x2="22" y2="21" />
+        </svg>
+      </button>
+    </div>
+
+    <span class="rt-sep" aria-hidden="true"></span>
+
+    <div class="rt-toolbar__section rt-toolbar__section--end" role="group" aria-label="Toolbar">
+      <button
+        type="button"
+        class="rt-icon-btn rt-icon-btn--chev"
+        [attr.title]="toolbarCollapsed() ? 'Expand toolbar' : 'Collapse toolbar'"
+        [attr.aria-expanded]="!toolbarCollapsed()"
+        [disabled]="false"
+        (mousedown)="$event.preventDefault()"
+        (click)="$event.preventDefault(); toggleToolbarCollapsed()"
+      >
+        <svg class="rt-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          @if (toolbarCollapsed()) {
+            <path d="M6 9l6 6 6-6" />
+          } @else {
+            <path d="M18 15l-6-6-6 6" />
+          }
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  @if (toolbarCollapsed()) {
+    <div class="rt-toolbar__row rt-toolbar__row--collapsed-strip">
+      <button
+        type="button"
+        class="rt-collapsed-launch"
+        (click)="$event.preventDefault(); toggleToolbarCollapsed()"
+      >
+        Show text formatting
+      </button>
+    </div>
+  }
 </div>

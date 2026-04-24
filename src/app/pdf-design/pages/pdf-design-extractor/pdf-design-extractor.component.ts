@@ -93,7 +93,7 @@ export class PdfDesignExtractorComponent {
    * View-only hard lock.
    * This project is being converted to a renderer-only experience (no editing / mutation).
    */
-  private readonly VIEW_ONLY = true;
+  private readonly VIEW_ONLY = false;
   private readonly destroyRef = inject(DestroyRef);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
@@ -153,7 +153,7 @@ export class PdfDesignExtractorComponent {
   readonly cropModal = signal<CropModalState | null>(null);
   readonly templates = signal<TemplateCluster[]>([]);
   readonly tokens = signal<DesignTokens>({ colors: [], fonts: [], sizes: [] });
-  readonly editorMode = signal<'edit' | 'view'>('view');
+  readonly editorMode = signal<'edit' | 'view'>('edit');
   readonly activeAddTool = signal<'image' | 'video' | 'table' | 'userText' | null>(null);
   readonly zoom = signal(this.defaultZoom);
   readonly viewerImageDropActive = signal(false);
@@ -261,7 +261,6 @@ export class PdfDesignExtractorComponent {
 
   private readonly previewEffect = effect(() => {
     if (this.previewMode()) {
-      this.editorMode.set('view');
       this.selEl.set(null);
     }
   });
@@ -1073,7 +1072,7 @@ export class PdfDesignExtractorComponent {
       if (s.addedTables) this.addedTables.set(s.addedTables);
       if (s.addedRichTexts) this.addedRichTexts.set(s.addedRichTexts);
       if (typeof s.zoom === 'number') this.zoom.set(s.zoom);
-      if (s.editorMode === 'view' || s.editorMode === 'edit') this.editorMode.set(s.editorMode);
+      if (s.editorMode === 'view' || s.editorMode === 'edit') this.editorMode.set('edit');
       if (
         s.activeAddTool === null ||
         s.activeAddTool === 'image' ||
@@ -1191,7 +1190,6 @@ export class PdfDesignExtractorComponent {
       ...prev,
       [pn]: [...(prev[pn] || []), { id, type: 'image', x, y, w, h, src, _userAdded: true }],
     }));
-    this.editorMode.set('view');
     this.activeAddTool.set('image');
   }
 
@@ -1211,7 +1209,6 @@ export class PdfDesignExtractorComponent {
       ...prev,
       [pn]: [...(prev[pn] || []), { id, type: 'video', x, y, w, h, src, _userAdded: true }],
     }));
-    this.editorMode.set('view');
     this.activeAddTool.set('video');
   }
 
@@ -1272,7 +1269,6 @@ export class PdfDesignExtractorComponent {
       ...prev,
       [pn]: [...(prev[pn] || []), tbl],
     }));
-    this.editorMode.set('view');
     this.activeAddTool.set('table');
     this.selEl.set(tbl);
   }
@@ -1357,11 +1353,22 @@ export class PdfDesignExtractorComponent {
     });
   }
 
-  setEditorMode(mode: 'edit' | 'view'): void {
-    // View-only: ignore any attempt to enable editing.
-    void mode;
-    this.editorMode.set('view');
-    this.selEl.set(null);
+  setEditorMode(_mode: 'edit' | 'view'): void {
+    if (this.VIEW_ONLY) {
+      this.editorMode.set('view');
+      this.selEl.set(null);
+      return;
+    }
+    this.editorMode.set('edit');
+  }
+
+  /** Rich-text toolbar: ensure edit mode, exit read-only preview, run Claude layout analysis for the current page. */
+  async onToolbarEditWithClaude(): Promise<void> {
+    this.setEditorMode('edit');
+    if (this.previewMode()) {
+      this.closePreview();
+    }
+    await this.convertCurrentPagePdfTextToBlocksWithClaude();
   }
 
   isPdfDerivedUserText(block: UserTextElement): boolean {
@@ -1390,10 +1397,96 @@ export class PdfDesignExtractorComponent {
     this.captureBeforeChange();
     const blocks = this.insertPdfTextBlocks(pg.pageNum, drafts);
     if (!blocks.length) return;
-    this.editorMode.set('view');
     this.activeAddTool.set('userText');
     this.selEl.set(blocks[0]!);
     this.placedTextUndoGate = blocks[0]!.id;
+  }
+
+  async convertCurrentPagePdfTextToBlocksWithClaude(): Promise<void> {
+    if (this.VIEW_ONLY) return;
+    const pg = this.pg();
+    if (!pg) return;
+    if (!pg.fullUrl?.startsWith('data:image/')) {
+      alert('This page does not have a rasterized image available for AI layout analysis.');
+      return;
+    }
+    if (!pg.textElements?.length) {
+      alert('No PDF text fragments were found on this page.');
+      return;
+    }
+
+    try {
+      this.loading.set(true);
+      const { drafts } = await firstValueFrom(
+        this.pdfsApi.analyzePdfLayoutPage({
+          provider: 'claude',
+          pageNum: pg.pageNum,
+          pageWidth: pg.width,
+          pageHeight: pg.height,
+          imageDataUrl: pg.fullUrl,
+          textElements: pg.textElements,
+        }),
+      );
+
+      if (!drafts.length) {
+        alert('Claude returned no editable blocks for this page.');
+        return;
+      }
+
+      this.captureBeforeChange();
+      const blocks = this.insertPdfTextBlocks(pg.pageNum, drafts as any);
+      if (!blocks.length) return;
+      this.activeAddTool.set('userText');
+      this.selEl.set(blocks[0]!);
+      this.placedTextUndoGate = blocks[0]!.id;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      alert(`Claude layout analysis failed: ${msg}`);
+    } finally {
+      this.loading.set(false);
+    }
+  }
+
+  async convertAllPagesPdfTextToBlocksWithClaude(): Promise<void> {
+    if (this.VIEW_ONLY) return;
+    const pages = this.pages().filter((p) => p.textElements?.length && p.fullUrl?.startsWith('data:image/'));
+    if (!pages.length) {
+      alert('No pages have enough data for AI layout analysis.');
+      return;
+    }
+
+    try {
+      this.loading.set(true);
+      this.captureBeforeChange();
+      let firstBlock: UserTextElement | null = null;
+
+      for (const pg of pages) {
+        const { drafts } = await firstValueFrom(
+          this.pdfsApi.analyzePdfLayoutPage({
+            provider: 'claude',
+            pageNum: pg.pageNum,
+            pageWidth: pg.width,
+            pageHeight: pg.height,
+            imageDataUrl: pg.fullUrl,
+            textElements: pg.textElements,
+          }),
+        );
+        const blocks = this.insertPdfTextBlocks(pg.pageNum, drafts as any);
+        if (!firstBlock && blocks.length) firstBlock = blocks[0]!;
+      }
+
+      if (!firstBlock) return;
+      const targetIdx = this.pages().findIndex((pg) => pg.pageNum === (firstBlock!.sourcePageNum ?? 1));
+      if (targetIdx >= 0) this.selPage.set(targetIdx);
+      this.activeAddTool.set('userText');
+      this.selEl.set(firstBlock);
+      this.placedTextUndoGate = firstBlock.id;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      alert(`Claude layout analysis failed: ${msg}`);
+    } finally {
+      this.loading.set(false);
+    }
   }
 
   convertAllPagesPdfTextToBlocks(): void {
@@ -1417,7 +1510,6 @@ export class PdfDesignExtractorComponent {
     if (!firstBlock) return;
     const targetIdx = this.pages().findIndex((pg) => pg.pageNum === (firstBlock!.sourcePageNum ?? 1));
     if (targetIdx >= 0) this.selPage.set(targetIdx);
-    this.editorMode.set('view');
     this.activeAddTool.set('userText');
     this.selEl.set(firstBlock);
     this.placedTextUndoGate = firstBlock.id;
@@ -1557,7 +1649,6 @@ export class PdfDesignExtractorComponent {
 
     const toolKind = (e.dataTransfer?.getData('application/x-avyro-add-tool') || '').trim();
     if (toolKind === 'image' || toolKind === 'video') {
-      this.editorMode.set('view');
       this.activeAddTool.set(toolKind);
       this.pendingAddToolDrop = { kind: toolKind, x, y };
       if (toolKind === 'image') this.clickAddImage();
@@ -1568,7 +1659,6 @@ export class PdfDesignExtractorComponent {
     let file = await imageFileFromDataTransfer(e.dataTransfer);
     if (!file) file = Array.from(e.dataTransfer?.files || []).find(isLikelyVideoFile) || null;
     if (!file) return;
-    this.editorMode.set('view');
     if (isLikelyVideoFile(file)) {
       const vhit = findVideoAtPagePoint(pgLocal.pageNum, this.addedVideos(), x, y);
       if (vhit) this.handleReplaceVideo(vhit, file);
@@ -2187,7 +2277,6 @@ export class PdfDesignExtractorComponent {
       ...prev,
       [pn]: [...(prev[pn] || []), block],
     }));
-    this.editorMode.set('view');
     this.activeAddTool.set('userText');
     this.placedTextUndoGate = id;
     this.selEl.set(block);
@@ -2460,7 +2549,6 @@ export class PdfDesignExtractorComponent {
     const exact = this.exactPdfTextBlockForSourceIds(pn, draft.sourceTextIds);
     if (exact) {
       this.selEl.set(exact);
-      this.editorMode.set('view');
       this.activeAddTool.set('userText');
       this.placedTextUndoGate = exact.id;
       return;
@@ -2470,7 +2558,6 @@ export class PdfDesignExtractorComponent {
     const [block] = this.insertPdfTextBlocks(pn, [draft]);
     if (!block) return;
     this.selEl.set(block);
-    this.editorMode.set('view');
     this.activeAddTool.set('userText');
     this.placedTextUndoGate = block.id;
   }
@@ -3307,7 +3394,6 @@ export class PdfDesignExtractorComponent {
     const origEl = e.pgData?.textElements.find((te) => te.id === e.elId);
     this.selPage.set(idx);
     if (origEl) this.selEl.set(origEl);
-    this.editorMode.set('view');
   }
 
   clickById(id: string): void {

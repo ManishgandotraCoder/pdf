@@ -1,5 +1,35 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
+import type { TextElement } from '../models/pdf-design.models';
+
+export type PdfLayoutProvider = 'openai' | 'claude';
+
+export type PdfLayoutAnalyzePageInput = {
+  provider?: PdfLayoutProvider;
+  pageNum: number;
+  pageWidth: number;
+  pageHeight: number;
+  imageDataUrl: string;
+  textElements: TextElement[];
+};
+
+export type PdfLayoutDraft = {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  html: string;
+  sourceTextIds: string[];
+  sourceStyle: {
+    fontFamily: string;
+    fontSize: number;
+    fontSizePx?: number;
+    fontWeight: string;
+    fontStyle: string;
+    color: string;
+  };
+  sourceLayoutStyle?: unknown;
+};
 
 export type PdfRecord = {
   id: string;
@@ -59,6 +89,20 @@ export class PdfsApiService {
 
   pdfFileUrl(id: string): string {
     return `${this.baseUrl}/pdfs/${encodeURIComponent(id)}/file`;
+  }
+
+  analyzePdfLayoutPage(input: PdfLayoutAnalyzePageInput) {
+    return this.http.post<{ drafts: PdfLayoutDraft[]; model: string | null }>(
+      `${this.baseUrl}/pdf-layout/analyze-page`,
+      {
+        provider: input.provider || 'openai',
+        pageNum: input.pageNum,
+        pageWidth: input.pageWidth,
+        pageHeight: input.pageHeight,
+        imageDataUrl: input.imageDataUrl,
+        textElements: input.textElements,
+      },
+    );
   }
 }
 

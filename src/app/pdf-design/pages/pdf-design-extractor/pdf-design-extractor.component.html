@@ -358,6 +358,22 @@
       </button>
       }
     </div>
+    @if (selEl(); as rteSel) {
+    @if (rteSel.type === 'userText' && editorMode() === 'edit' && !previewMode()) {
+    <div class="topbar-rte" aria-label="Text formatting for selected block">
+      <app-rich-text-toolbar
+        class="topbar-rte__toolbar"
+        [disabled]="false"
+        [showEditClaude]="true"
+        [claudePending]="loading()"
+        [fontChoices]="tokens().fonts"
+        [pageZoom]="zoom()"
+        (pageZoomChange)="zoom.set($event)"
+        (editWithClaude)="onToolbarEditWithClaude()"
+      />
+    </div>
+    }
+    }
 
     <div class="canvas-scroll" [class.canvas-scroll--drop]="viewerImageDropActive()" (click)="onStageClick()"
       (dragover)="handleViewerDragOver($event)" (dragenter)="handleViewerDragEnter($event)"
@@ -608,21 +624,6 @@
       <div class="inspector__section-title">Workspace</div>
       <div
         style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; padding:6px; background:#f9fafb; border-radius:10px">
-        <!-- VIEW -->
-        <div class="tooltip-wrapper">
-          <button type="button" title="View — read without selection outlines"
-            (click)="setEditorMode('view')" class="inspector-icon-btn"
-            style="width:40px; height:40px; display:flex; align-items:center; justify-content:center; border-radius:8px; transition:all 0.2s cubic-bezier(0.4,0,0.2,1); background:#fff; box-shadow:0 1px 2px rgba(0,0,0,0.08)"
-            [style.border]="'1px solid ' + (editorMode() === 'view' ? '#1976d2' : 'rgba(0,0,0,0.12)')"
-            [style.color]="editorMode() === 'view' ? '#1976d2' : '#4338ca'" [style.cursor]="'pointer'">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-              <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z" />
-              <circle cx="12" cy="12" r="3" />
-            </svg>
-          </button>
-          <span class="tooltip-text">View</span>
-        </div>
-
         <!-- ADD PAGE -->
         <div class="tooltip-wrapper">
           <button type="button" title="Add Page (after current)" (click)="addPageAfterCurrent()"
@@ -655,6 +656,23 @@
           <span class="tooltip-text">Remove Page</span>
         </div>
       </div>
+    </div>
+
+    <div class="inspector__block">
+      <div class="inspector__section-title">PDF text (AI)</div>
+      <div style="display:flex; gap:8px; flex-wrap:wrap">
+        <button type="button" (click)="convertCurrentPagePdfTextToBlocksWithClaude()"
+          style="flex:1; min-width: 160px; padding: 10px 12px; border-radius: 10px; border: 1px solid rgba(15, 23, 42, 0.12); background: #fff; cursor: pointer; font-size: 11px; font-weight: 800; color:#0f172a">
+          Unlock page with Claude
+        </button>
+        <button type="button" (click)="convertAllPagesPdfTextToBlocksWithClaude()"
+          style="flex:1; min-width: 160px; padding: 10px 12px; border-radius: 10px; border: 1px solid rgba(15, 23, 42, 0.12); background: #fff; cursor: pointer; font-size: 11px; font-weight: 800; color:#0f172a">
+          Unlock all pages (Claude)
+        </button>
+      </div>
+      <p style="margin: 10px 2px 0; font-size: 10px; color: #64748b; line-height: 1.45">
+        Claude groups OCR fragments into blocks and returns dominant font family/size/weight/style per block.
+      </p>
     </div>
 
     @if (inspectorTab() === 'assets') {
@@ -826,14 +844,9 @@
                 ">
           {{ isPdfDerivedUserText(sel) ? 'PDF text block' : 'Rich text block' }}
         </div>
-        @if (editorMode() === 'edit') {
-        <div style="margin-bottom: 10px">
-          <app-rich-text-toolbar [disabled]="false" [fontChoices]="tokens().fonts" />
-        </div>
-        }
         <p style="font-size: 10px; color: #64748b; margin-bottom: 10px; line-height: 1.5">
-          Click inside the block on the page, then use the toolbar for paragraphs, bullet lists, numbered lists,
-          links, alignment, and typography.
+          Click inside the block on the page, then use the <strong>formatting bar at the top</strong> for
+          paragraphs, bullet lists, numbered lists, links, alignment, and typography.
         </p>
         @if (isPdfDerivedUserText(sel)) {
         <div style="
@@ -910,7 +923,13 @@
         </div>
         @if (editorMode() === 'edit') {
         <div style="margin-bottom: 10px">
-          <app-rich-text-toolbar [disabled]="false" [fontChoices]="tokens().fonts" />
+          <app-rich-text-toolbar
+            [disabled]="false"
+            [showEditClaude]="true"
+            [claudePending]="loading()"
+            [fontChoices]="tokens().fonts"
+            (editWithClaude)="onToolbarEditWithClaude()"
+          />
 
         </div>
         }

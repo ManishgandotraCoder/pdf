@@ -330,7 +330,8 @@ function fontInfoFromNodeInEditable(
   if (!el || !editableRoot.contains(el)) return null;
   const cs = getComputedStyle(el);
   const fontFamily = (cs.fontFamily || '').split(',')[0].replace(/['"]/g, '').trim();
-  const fontSizePx = Math.round(parseFloat(cs.fontSize) || 12);
+  const rawPx = parseFloat(cs.fontSize) || 12;
+  const fontSizePx = Math.round(rawPx * 10) / 10;
   return { fontFamily, fontSizePx };
 }
 
@@ -365,5 +366,130 @@ export function promptLinkUrl(): void {
   if (u) {
     restoreRichTextSelection();
     execRich('createLink', absolutizeUrl(u.trim()));
+  }
+}
+
+const BLOCK_FOR_LINE_HEIGHT = new Set([
+  'P',
+  'DIV',
+  'LI',
+  'H1',
+  'H2',
+  'H3',
+  'H4',
+  'H5',
+  'H6',
+  'BLOCKQUOTE',
+]);
+
+/**
+ * Set line-height on the block that contains the selection start (or whole editable as fallback).
+ */
+export function applyBlockLineHeight(lh: string): void {
+  const { node: start, root } = startNodeForBlockProbe();
+  if (!root?.isConnected) return;
+  if (!start) {
+    (root as HTMLElement).style.lineHeight = lh;
+    return;
+  }
+  let el: Element | null = start as Element | null;
+  while (el && el !== root) {
+    if (BLOCK_FOR_LINE_HEIGHT.has(el.tagName)) {
+      (el as HTMLElement).style.lineHeight = lh;
+      return;
+    }
+    el = el.parentElement;
+  }
+  (root as HTMLElement).style.lineHeight = lh;
+}
+
+const ALIGN_MAP: Record<string, 'left' | 'center' | 'right' | 'justify'> = {
+  left: 'left',
+  start: 'left',
+  center: 'center',
+  right: 'right',
+  end: 'right',
+  justify: 'justify',
+};
+
+function startNodeForBlockProbe(): { node: Node | null; root: HTMLElement | null } {
+  const root = savedRichTextEditable;
+  if (!root?.isConnected) return { node: null, root: null };
+  const sel = window.getSelection();
+  if (sel?.rangeCount) {
+    let node: Node | null = sel.getRangeAt(0).startContainer;
+    if (node.nodeType === Node.TEXT_NODE) node = (node as Text).parentElement;
+    if (node && root.contains(node as Node)) return { node, root };
+  }
+  if (savedRichTextRange && root.contains(savedRichTextRange.startContainer)) {
+    let node: Node | null = savedRichTextRange.startContainer;
+    if (node.nodeType === Node.TEXT_NODE) node = (node as Text).parentElement;
+    return { node, root };
+  }
+  return { node: null, root };
+}
+
+export function getBlockTextAlignValue(): 'left' | 'center' | 'right' | 'justify' {
+  const { node: start, root } = startNodeForBlockProbe();
+  if (!root) return 'left';
+  if (!start) {
+    const a = (getComputedStyle(root).textAlign || 'left') as string;
+    return ALIGN_MAP[a] ?? 'left';
+  }
+  let el: Element | null = start as Element | null;
+  while (el && el !== root) {
+    if (LIST_BLOCK_TAGS.has(el.tagName)) {
+      const a = (getComputedStyle(el).textAlign || 'left') as string;
+      return ALIGN_MAP[a] ?? 'left';
+    }
+    el = el.parentElement;
+  }
+  const a = (getComputedStyle(root).textAlign || 'left') as string;
+  return ALIGN_MAP[a] ?? 'left';
+}
+
+/**
+ * For the "Normal / headings" style dropdown: map block tag to a stable string value.
+ */
+export function getParagraphFormatValue():
+  | 'p'
+  | 'h1'
+  | 'h2'
+  | 'h3'
+  | 'h4' {
+  const { node: start, root } = startNodeForBlockProbe();
+  if (!root) return 'p';
+  if (!start) return 'p';
+  let el: Element | null = start as Element | null;
+  const headTags = new Set(['P', 'H1', 'H2', 'H3', 'H4']);
+  while (el && el !== root) {
+    if (el.tagName === 'LI') {
+      const inner = el.querySelector('p, h1, h2, h3, h4');
+      if (inner) {
+        const t = inner.tagName.toLowerCase() as 'p' | 'h1' | 'h2' | 'h3' | 'h4';
+        if (t === 'p' || t === 'h1' || t === 'h2' || t === 'h3' || t === 'h4') return t;
+      }
+    }
+    if (headTags.has(el.tagName)) {
+      return el.tagName.toLowerCase() as 'p' | 'h1' | 'h2' | 'h3' | 'h4';
+    }
+    if (el.tagName === 'DIV') return 'p';
+    el = el.parentElement;
+  }
+  return 'p';
+}
+
+export function promptImageUrlAndInsert(): void {
+  const u = window.prompt('Image URL (https:)', 'https://');
+  if (!u?.trim()) return;
+  const url = u.trim();
+  restoreRichTextSelection();
+  try {
+    const doc = document as Document & {
+      execCommand(commandId: string, showUI?: boolean, value?: string | boolean): boolean;
+    };
+    doc.execCommand('insertImage', false, absolutizeUrl(url));
+  } catch {
+    /* ignore */
   }
 }
