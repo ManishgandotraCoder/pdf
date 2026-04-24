@@ -450,23 +450,18 @@ select:focus-visible {
   align-items: center;
   justify-content: center;
   border-radius: 10px;
-  border: 1px solid rgba(15, 23, 42, 0.12);
-  background: rgba(255, 255, 255, 0.96);
-  color: rgba(15, 23, 42, 0.85);
-  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+  border: none;
+  background: transparent;
+  color: rgba(15, 23, 42, 0.72);
+  box-shadow: none;
   cursor: pointer;
   transition:
     transform 0.12s ease,
-    background 0.12s ease,
-    border-color 0.12s ease,
-    box-shadow 0.12s ease,
     color 0.12s ease;
 }
 
 .sidebar__page-actions:hover {
-  border-color: rgba(13, 148, 136, 0.35);
   color: var(--accent-strong);
-  box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.08), 0 1px 3px rgba(15, 23, 42, 0.08);
 }
 
 .sidebar__page-actions:active {
@@ -497,8 +492,8 @@ select:focus-visible {
 
 .sidebar__page-number {
   position: absolute;
-  bottom: 4px;
-  right: 4px;
+  top: 4px;
+  left: 4px;
   background: rgba(0, 0, 0, 0.75);
   color: #ffffff;
   font-size: 9px;
@@ -557,17 +552,15 @@ select:focus-visible {
   width: 26px;
   height: 26px;
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.88);
-  border-color: rgba(255, 255, 255, 0.5);
-  color: rgba(255, 255, 255, 0.9);
-  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.22);
-  backdrop-filter: blur(6px);
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.92);
+  box-shadow: none;
+  backdrop-filter: none;
 }
 
 .sidebar--collapsed .sidebar__page-actions:hover {
   color: #ffffff;
-  border-color: rgba(13, 148, 136, 0.55);
-  box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.12), 0 8px 22px rgba(15, 23, 42, 0.24);
 }
 
 .sidebar--collapsed .sidebar__page-thumb {
@@ -582,8 +575,8 @@ select:focus-visible {
 
 .sidebar--collapsed .sidebar__page-number {
   position: absolute;
-  bottom: 5px;
-  right: 5px;
+  top: 5px;
+  left: 5px;
   background: rgba(0, 0, 0, 0.72);
   color: #ffffff;
   font-size: 14px;

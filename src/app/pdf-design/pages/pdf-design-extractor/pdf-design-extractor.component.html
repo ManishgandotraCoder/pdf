@@ -294,6 +294,44 @@
       }
       <div style="flex: 1"></div>
       <div class="topbar__divider"></div>
+      @if (!previewMode()) {
+      <button type="button" (click)="clearAllCanvasEdits()" style="
+            padding: 8px 12px;
+            background: #b91c1c;
+            color: #FFF;
+            border: 1px solid #b91c1c;
+            border-radius: 8px;
+            font-size: 12px;
+            cursor: pointer;
+            font-weight: 900;
+          " title="Remove all edits">
+        Remove all edits
+      </button>
+      <button type="button" (click)="saveEdits()" style="
+            padding: 8px 12px;
+            background: #0f766e;
+            color: #FFF;
+            border: 1px solid #0f766e;
+            border-radius: 8px;
+            font-size: 12px;
+            cursor: pointer;
+            font-weight: 900;
+          " title="Save">
+        Save
+      </button>
+      <button type="button" (click)="exportEditedPdfFile()" style="
+            padding: 8px 12px;
+            background: #0f172a;
+            color: #FFF;
+            border: 1px solid rgba(15,23,42,0.8);
+            border-radius: 8px;
+            font-size: 12px;
+            cursor: pointer;
+            font-weight: 900;
+          " title="Export updated PDF">
+        Export updated PDF
+      </button>
+      }
       @if (false) {
       <button type="button" title="Undo (⌘Z / Ctrl+Z)" aria-label="Undo" (click)="undo()" [disabled]="!canUndo()"
         style="width: 36px; height: 36px; padding: 0; display: flex; align-items: center; justify-content: center; border-radius: 8px"
