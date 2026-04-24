@@ -16,7 +16,7 @@ import {
 })
 export class PlacedUserTextBodyComponent {
   readonly html = input<string>('');
-  // View-only: always render as non-editable surface.
+  /** When true, the surface is not editable (view / preview). */
   readonly readOnly = input(true);
 
   readonly htmlChange = output<string>();
@@ -36,9 +36,10 @@ export class PlacedUserTextBodyComponent {
     effect(() => {
       const el = this.editable()?.nativeElement;
       if (!el) return;
+      const ro = this.readOnly();
       const html = this.normalizeEditableHtml(this.html());
       if (!this.focused && el.innerHTML !== html) el.innerHTML = html;
-      el.setAttribute('contenteditable', 'false');
+      el.setAttribute('contenteditable', ro ? 'false' : 'true');
     });
 
     if (typeof document !== 'undefined') {
@@ -53,13 +54,20 @@ export class PlacedUserTextBodyComponent {
   }
 
   onFocus(): void {
-    // Keep focus state signals false for view-only rendering.
-    this.focused = false;
+    if (this.readOnly()) {
+      this.focused = false;
+      return;
+    }
+    this.focused = true;
+    this.focusFirstEdit.emit();
   }
 
   onBlur(e: Event): void {
     this.focused = false;
-    void e;
+    const el = e.target as HTMLDivElement;
+    if (!this.readOnly()) {
+      this.htmlChange.emit(el.innerHTML);
+    }
     queueMicrotask(() => {
       this.focusStateChange.emit(this.isSelectionInsideEditable());
       this.emitSelectionState();

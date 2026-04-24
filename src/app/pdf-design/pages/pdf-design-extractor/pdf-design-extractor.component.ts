@@ -1362,6 +1362,14 @@ export class PdfDesignExtractorComponent {
     this.editorMode.set('edit');
   }
 
+  /** Inspector workspace: enable editing; exits read-only preview when `?preview=1`. */
+  activatePdfEditing(): void {
+    this.setEditorMode('edit');
+    if (this.previewMode()) {
+      this.closePreview();
+    }
+  }
+
   /** Rich-text toolbar: ensure edit mode, exit read-only preview, run Claude layout analysis for the current page. */
   async onToolbarEditWithClaude(): Promise<void> {
     this.setEditorMode('edit');
